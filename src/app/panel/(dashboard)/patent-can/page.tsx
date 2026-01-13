@@ -3,6 +3,7 @@ import Link from "next/link";
 import { formatDistanceToNow } from "date-fns/formatDistanceToNow";
 import { tr } from "date-fns/locale/tr";
 import { cleanContent } from "@/lib/chat-utils";
+import { DeleteButton } from "./delete-button";
 
 interface ChatMessage {
     id: number;
@@ -136,12 +137,18 @@ export default async function PatentCanPage() {
                                             />
                                         </td>
                                         <td className="p-4 align-middle text-right">
-                                            <Link
-                                                href={`/panel/patent-can/${session.session_id}?customerTitle=${encodeURIComponent(session.customerName)}`}
-                                                className="inline-flex h-8 items-center justify-center rounded-md border border-input bg-background px-3 text-xs font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
-                                            >
-                                                Görüntüle
-                                            </Link>
+                                            <div className="flex justify-end gap-2">
+                                                <DeleteButton
+                                                    sessionId={session.session_id}
+                                                    customerName={session.customerName}
+                                                />
+                                                <Link
+                                                    href={`/panel/patent-can/${session.session_id}?customerTitle=${encodeURIComponent(session.customerName)}`}
+                                                    className="inline-flex h-8 items-center justify-center rounded-md border border-input bg-background px-3 text-xs font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+                                                >
+                                                    Görüntüle
+                                                </Link>
+                                            </div>
                                         </td>
                                     </tr>
                                 )
