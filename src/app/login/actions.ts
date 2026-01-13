@@ -16,9 +16,9 @@ export async function login(formData: FormData) {
     });
 
     if (error) {
-        redirect("/admin/login?error=Invalid credentials");
+        redirect("/login?error=Invalid credentials");
     }
 
     revalidatePath("/", "layout");
-    redirect("/admin/patent-can");
+    redirect("/panel/patent-can");
 }

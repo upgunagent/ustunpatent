@@ -137,7 +137,7 @@ export default async function PatentCanPage() {
                                         </td>
                                         <td className="p-4 align-middle text-right">
                                             <Link
-                                                href={`/admin/patent-can/${session.session_id}?customerTitle=${encodeURIComponent(session.customerName)}`}
+                                                href={`/panel/patent-can/${session.session_id}?customerTitle=${encodeURIComponent(session.customerName)}`}
                                                 className="inline-flex h-8 items-center justify-center rounded-md border border-input bg-background px-3 text-xs font-medium shadow-sm transition-colors hover:bg-accent hover:text-accent-foreground"
                                             >
                                                 Görüntüle

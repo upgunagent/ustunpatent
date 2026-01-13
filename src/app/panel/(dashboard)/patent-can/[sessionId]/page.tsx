@@ -3,6 +3,7 @@ import clsx from "clsx";
 import { twMerge } from "tailwind-merge";
 import { format } from "date-fns";
 import { cleanContent, extractDateFromContent } from "@/lib/chat-utils";
+import Image from "next/image";
 
 function cn(...classes: (string | undefined | null | false)[]) {
     return twMerge(clsx(classes));
@@ -117,7 +118,20 @@ export default async function ChatDetailPage({
                                 )}
                             >
                                 <div className={cn("flex justify-between items-center mb-1 text-xs opacity-80 gap-4 border-b border-opacity-20 pb-1", isHuman ? "border-white" : "border-gray-300")}>
-                                    <span className="font-semibold">{isHuman ? "Müşteri" : "PatentCan (AI)"}</span>
+                                    <div className="flex items-center gap-2">
+                                        {!isHuman && (
+                                            <div className="relative h-6 w-6 overflow-hidden rounded-full border border-gray-200">
+                                                <Image
+                                                    src="/ustun_avatar_balon.png"
+                                                    alt="Bot Avatar"
+                                                    fill
+                                                    className="object-cover"
+                                                    unoptimized
+                                                />
+                                            </div>
+                                        )}
+                                        <span className="font-semibold">{isHuman ? "Müşteri" : "PatentCan (AI)"}</span>
+                                    </div>
                                     <span className="font-mono text-[10px]">{dateStr}</span>
                                 </div>
                                 <div
