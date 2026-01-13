@@ -4,6 +4,8 @@ import { twMerge } from "tailwind-merge";
 import { format } from "date-fns";
 import { cleanContent, extractDateFromContent } from "@/lib/chat-utils";
 import Image from "next/image";
+import Link from "next/link";
+import { LucideArrowLeft } from "lucide-react";
 
 function cn(...classes: (string | undefined | null | false)[]) {
     return twMerge(clsx(classes));
@@ -49,7 +51,13 @@ export default async function ChatDetailPage({
 
     return (
         <div className="flex h-[calc(100vh-10rem)] flex-col space-y-4">
-            <div className="flex items-center justify-between border-b pb-4">
+            <div className="flex items-center gap-4 border-b pb-4">
+                <Link
+                    href="/panel/patent-can"
+                    className="flex h-10 w-10 items-center justify-center rounded-full border bg-background shadow-sm transition-colors hover:bg-muted"
+                >
+                    <LucideArrowLeft className="h-4 w-4" />
+                </Link>
                 <div>
                     <h2 className="text-lg font-semibold">{customerTitle}</h2>
                     <p className="text-xs text-muted-foreground font-mono">{sessionId}</p>
