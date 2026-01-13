@@ -11,7 +11,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey, {
 });
 
 async function createAdmin() {
-    const email = 'ustunpatent@gmail.maill.com'; // User's specific typo preserved
+    const email = 'ustunpatent@gmail.com'; // User corrected email
     const password = '123456';
 
     console.log(`Checking if user ${email} exists...`);
