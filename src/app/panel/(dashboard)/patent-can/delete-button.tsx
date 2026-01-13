@@ -15,7 +15,12 @@ export function DeleteButton({ sessionId, customerName }: DeleteButtonProps) {
     const handleDelete = async () => {
         if (confirm(`${customerName} (ID: ${sessionId.substring(0, 8)}...) adlı görüşmeyi silmek istediğinize emin misiniz? Bu işlem geri alınamaz.`)) {
             startTransition(async () => {
-                await deleteSession(sessionId);
+                const result = await deleteSession(sessionId);
+                if (!result.success) {
+                    alert('Hata: ' + result.error);
+                } else {
+                    // Optional: alert('Başarılı: ' + result.message);
+                }
             });
         }
     };
