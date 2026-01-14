@@ -5,7 +5,7 @@ export default function LoginPage() {
     return (
         <div className="flex min-h-screen w-full">
             {/* Left Side - Branding (Black) */}
-            <div className="hidden w-1/2 flex-col items-center justify-center bg-black p-10 text-white lg:flex">
+            <div className="hidden w-1/2 flex-col items-center justify-center bg-[#001a4f] p-10 text-white lg:flex">
                 <div className="max-w-md text-center">
                     <div className="mb-8 flex justify-center">
                         <div className="relative h-32 w-80">
@@ -32,7 +32,7 @@ export default function LoginPage() {
             <div className="flex w-full flex-col items-center justify-center bg-white p-8 lg:w-1/2">
                 <div className="w-full max-w-sm space-y-6">
                     <div className="flex flex-col space-y-2 text-center">
-                        <h1 className="text-2xl font-semibold tracking-tight text-gray-900">
+                        <h1 className="text-2xl font-semibold tracking-tight text-[#001a4f]">
                             Yönetici Girişi
                         </h1>
                         <p className="text-sm text-gray-500">
@@ -55,7 +55,7 @@ export default function LoginPage() {
                                     type="email"
                                     placeholder="ornek@ustunpatent.com"
                                     required
-                                    className="flex h-11 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 transition-colors focus:border-gray-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-gray-900 placeholder:text-gray-400"
+                                    className="flex h-11 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 transition-colors focus:border-[#001a4f] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#001a4f] placeholder:text-gray-400"
                                 />
                             </div>
                             <div className="grid gap-2">
@@ -72,12 +72,12 @@ export default function LoginPage() {
                                     name="password"
                                     type="password"
                                     required
-                                    className="flex h-11 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 transition-colors focus:border-gray-900 focus:bg-white focus:outline-none focus:ring-1 focus:ring-gray-900"
+                                    className="flex h-11 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 transition-colors focus:border-[#001a4f] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#001a4f]"
                                 />
                             </div>
                             <button
                                 formAction={login}
-                                className="inline-flex h-11 w-full items-center justify-center rounded-lg bg-black px-8 text-sm font-medium text-white transition-colors hover:bg-gray-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-900 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 mt-2"
+                                className="inline-flex h-11 w-full items-center justify-center rounded-lg bg-[#001a4f] px-8 text-sm font-medium text-white transition-colors hover:bg-[#002366] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#001a4f] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 mt-2"
                             >
                                 Giriş Yap
                             </button>
