@@ -81,35 +81,35 @@ export default function BulletinTable({ data }: BulletinTableProps) {
                         <tr>
                             <th
                                 style={{ width: 40, minWidth: 40 }}
-                                className="px-0.5 py-1 md:px-1 md:py-2 text-left text-[10px] md:text-[11px] lg:text-xs font-medium text-gray-500 uppercase tracking-tight bg-gray-50 border-r border-gray-200 relative group select-none"
+                                className="px-0.5 py-1 md:px-1 md:py-2 text-left text-[10px] md:text-[11px] lg:text-xs font-medium text-gray-500 uppercase tracking-tight bg-gray-50 border-r border-gray-200 relative group select-none whitespace-nowrap"
                             >
                                 <div className="flex items-center justify-between h-full overflow-hidden">
-                                    <span className="block w-full break-words leading-tight">Bülten No</span>
+                                    <span className="block w-full truncate">Bülten No</span>
                                 </div>
                             </th>
                             <th
                                 style={{ width: 40, minWidth: 40 }}
-                                className="px-0.5 py-1 md:px-1 md:py-2 text-left text-[10px] md:text-[11px] lg:text-xs font-medium text-gray-500 uppercase tracking-tight bg-gray-50 border-r border-gray-200 relative group select-none"
+                                className="px-0.5 py-1 md:px-1 md:py-2 text-left text-[10px] md:text-[11px] lg:text-xs font-medium text-gray-500 uppercase tracking-tight bg-gray-50 border-r border-gray-200 relative group select-none whitespace-nowrap"
                             >
                                 <div className="flex items-center justify-between h-full overflow-hidden">
-                                    <span className="block w-full break-words leading-tight">Logo</span>
+                                    <span className="block w-full truncate">Logo</span>
                                 </div>
                             </th>
-                            <ResizableTh title="Marka Adı" initialWidth={180} />
-                            <ResizableTh title="Marka Sahibi" initialWidth={180} />
-                            <ResizableTh title="Başvuru/Dosya No" initialWidth={110} />
-                            <ResizableTh title="Başvuru Tarihi" initialWidth={90} />
-                            <ResizableTh title="Kayıt Tarihi" initialWidth={90} />
-                            <ResizableTh title="Sınıflar" initialWidth={80} />
+                            <ResizableTh title="Marka Adı" initialWidth={100} />
+                            <ResizableTh title="Marka Sahibi" initialWidth={100} />
+                            <ResizableTh title="Başvuru/Dosya No" initialWidth={130} />
+                            <ResizableTh title="Başvuru Tarihi" initialWidth={110} />
+                            <ResizableTh title="Kayıt Tarihi" initialWidth={110} />
+                            <ResizableTh title="Sınıflar" initialWidth={90} />
                             <th
                                 className="px-1 py-1 md:px-2 md:py-2 text-left text-[10px] md:text-[11px] lg:text-xs font-medium text-gray-500 uppercase tracking-tight bg-gray-50 border-r border-gray-200 relative group select-none w-auto"
                             >
                                 <div className="flex items-center justify-between h-full overflow-hidden">
-                                    <span className="block w-full break-words leading-tight">Sınıf İçerikleri</span>
+                                    <span className="block w-full truncate">Sınıf İçerikleri</span>
                                 </div>
                             </th>
-                            <ResizableTh title="Çıkartılan İçerikler" initialWidth={120} />
-                            <ResizableTh title="Viyana Sınıfı" initialWidth={90} />
+                            <ResizableTh title="Çıkartılan İçerikler" initialWidth={140} />
+                            <ResizableTh title="Viyana Sınıfı" initialWidth={110} />
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
@@ -304,10 +304,10 @@ const ResizableTh = ({ title, initialWidth }: { title: string; initialWidth: num
     return (
         <th
             style={{ width: width, minWidth: width }}
-            className="px-1 py-1 md:px-2 md:py-2 text-left text-[10px] md:text-[11px] lg:text-xs font-medium text-gray-500 uppercase tracking-tight bg-gray-50 border-r border-gray-200 relative group select-none"
+            className="px-1 py-1 md:px-2 md:py-2 text-left text-[10px] md:text-[11px] lg:text-xs font-medium text-gray-500 uppercase tracking-tight bg-gray-50 border-r border-gray-200 relative group select-none whitespace-nowrap"
         >
             <div className="flex items-center justify-between h-full overflow-hidden">
-                <span className="block w-full break-words leading-tight">{title}</span>
+                <span className="block w-full truncate">{title}</span>
             </div>
             <div
                 onMouseDown={onMouseDown}
