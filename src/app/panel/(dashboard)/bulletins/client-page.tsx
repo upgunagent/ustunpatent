@@ -145,7 +145,7 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
                                 <Loader2 className="w-8 h-8 text-blue-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-pulse" />
                             </div>
                             <div className="text-center">
-                                <h3 className="text-lg font-semibold text-gray-900">Arama Yapılıyor</h3>
+                                <h3 className="text-lg font-semibold text-gray-900">Lütfen bekleyiniz..</h3>
                                 <p className="text-sm text-gray-500 mt-1">Veritabanı taranıyor, lütfen bekleyin...</p>
                             </div>
                         </div>
