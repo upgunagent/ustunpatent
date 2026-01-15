@@ -81,26 +81,38 @@ export default function BulletinTable({ data }: BulletinTableProps) {
                         <tr>
                             <th
                                 style={{ width: 40, minWidth: 40 }}
-                                className="px-0.5 py-1 md:px-1 md:py-2 text-left text-[10px] md:text-[11px] lg:text-xs font-medium text-gray-500 uppercase tracking-tight bg-gray-50 border-r border-gray-200 relative group select-none whitespace-nowrap"
+                                className="px-0.5 py-1 md:px-1 md:py-2 text-center text-[10px] md:text-[11px] lg:text-xs font-medium text-gray-500 uppercase tracking-tight bg-gray-50 border-r border-gray-200 relative group select-none whitespace-nowrap"
                             >
-                                <div className="flex items-center justify-between h-full overflow-hidden">
+                                <div className="flex items-center justify-center h-full overflow-hidden">
                                     <span className="block w-full truncate">Bülten No</span>
                                 </div>
                             </th>
                             <th
-                                style={{ width: 40, minWidth: 40 }}
-                                className="px-0.5 py-1 md:px-1 md:py-2 text-left text-[10px] md:text-[11px] lg:text-xs font-medium text-gray-500 uppercase tracking-tight bg-gray-50 border-r border-gray-200 relative group select-none whitespace-nowrap"
+                                style={{ width: 50, minWidth: 50 }}
+                                className="px-0.5 py-1 md:px-1 md:py-2 text-center text-[10px] md:text-[11px] lg:text-xs font-medium text-gray-500 uppercase tracking-tight bg-gray-50 border-r border-gray-200 relative group select-none whitespace-nowrap"
                             >
-                                <div className="flex items-center justify-between h-full overflow-hidden">
+                                <div className="flex items-center justify-center h-full overflow-hidden">
                                     <span className="block w-full truncate">Logo</span>
                                 </div>
                             </th>
-                            <ResizableTh title="Marka Adı" initialWidth={100} />
-                            <ResizableTh title="Marka Sahibi" initialWidth={100} />
+                            <th
+                                className="px-1 py-1 md:px-2 md:py-2 text-left text-[10px] md:text-[11px] lg:text-xs font-medium text-gray-500 uppercase tracking-tight bg-gray-50 border-r border-gray-200 relative group select-none w-auto whitespace-nowrap"
+                            >
+                                <div className="flex items-center justify-between h-full overflow-hidden">
+                                    <span className="block w-full truncate">Marka Adı</span>
+                                </div>
+                            </th>
+                            <th
+                                className="px-1 py-1 md:px-2 md:py-2 text-left text-[10px] md:text-[11px] lg:text-xs font-medium text-gray-500 uppercase tracking-tight bg-gray-50 border-r border-gray-200 relative group select-none w-auto whitespace-nowrap"
+                            >
+                                <div className="flex items-center justify-between h-full overflow-hidden">
+                                    <span className="block w-full truncate">Marka Sahibi</span>
+                                </div>
+                            </th>
                             <ResizableTh title="Başvuru/Dosya No" initialWidth={130} />
                             <ResizableTh title="Başvuru Tarihi" initialWidth={110} />
                             <ResizableTh title="Kayıt Tarihi" initialWidth={110} />
-                            <ResizableTh title="Sınıflar" initialWidth={90} />
+                            <ResizableTh title="Sınıflar" initialWidth={120} />
                             <th
                                 className="px-1 py-1 md:px-2 md:py-2 text-left text-[10px] md:text-[11px] lg:text-xs font-medium text-gray-500 uppercase tracking-tight bg-gray-50 border-r border-gray-200 relative group select-none w-auto"
                             >
@@ -116,15 +128,15 @@ export default function BulletinTable({ data }: BulletinTableProps) {
                         {data.map((mark, index) => (
                             <tr key={index} className="hover:bg-gray-50 divide-x divide-gray-200 group">
                                 <td
-                                    className="px-1 py-1 whitespace-nowrap text-[10px] md:text-[11px] lg:text-xs text-gray-900 overflow-hidden text-ellipsis border-gray-200 cursor-pointer active:bg-blue-50"
+                                    className="px-1 py-1 whitespace-nowrap text-center text-[10px] md:text-[11px] lg:text-xs text-gray-900 overflow-hidden text-ellipsis border-gray-200 cursor-pointer active:bg-blue-50"
                                     onClick={(e) => handleCopy(mark.issue_no, e)}
                                 >
                                     {String(mark.issue_no).trim()}
                                 </td>
-                                <td className="px-0.5 py-1 whitespace-nowrap text-[10px] md:text-[11px] lg:text-xs text-gray-500 border-gray-200">
+                                <td className="px-0.5 py-1 whitespace-nowrap text-center text-[10px] md:text-[11px] lg:text-xs text-gray-500 border-gray-200">
                                     {mark.logo_url ? (
                                         <div
-                                            className="relative w-8 h-8 md:w-10 md:h-10 border rounded cursor-pointer overflow-hidden bg-gray-100"
+                                            className="relative w-8 h-8 md:w-10 md:h-10 border rounded cursor-pointer overflow-hidden bg-gray-100 mx-auto"
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 setSelectedLogo(mark.logo_url);
