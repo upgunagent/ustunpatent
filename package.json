@@ -9,10 +9,10 @@
     "lint": "eslint"
   },
   "engines": {
-    "node": "18.x"
+    "node": "20.x"
   },
   "dependencies": {
-    "@sparticuz/chromium-min": "^119.0.0",
+    "@sparticuz/chromium-min": "^126.0.0",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.90.1",
     "clsx": "^2.1.1",
@@ -21,7 +21,7 @@
     "lucide-react": "^0.562.0",
     "next": "16.1.1",
     "puppeteer": "^24.35.0",
-    "puppeteer-core": "^19.11.1",
+    "puppeteer-core": "^22.12.0",
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "react": "19.2.3",
