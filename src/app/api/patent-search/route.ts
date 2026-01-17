@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
                     // @ts-ignore
                     defaultViewport: chromium.defaultViewport,
                     executablePath: await chromium.executablePath(
-                        `https://github.com/Sparticuz/chromium/releases/download/v126.0.0/chromium-v126.0.0-pack.tar`
+                        `https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar`
                     ),
                     // @ts-ignore
                     headless: chromium.headless,
