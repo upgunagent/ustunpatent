@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import puppeteer, { Page, Browser } from 'puppeteer-core';
-import chromium from '@sparticuz/chromium';
+import chromium from '@sparticuz/chromium-min';
 
 // Global browser instance
 let globalBrowser: Browser | null = null;
@@ -59,12 +59,13 @@ export async function POST(req: NextRequest) {
                 });
             } else {
                 // Production (Vercel)
-                const executablePath = await chromium.executablePath();
                 return await puppeteer.launch({
                     args: [...chromium.args, '--hide-scrollbars', '--disable-web-security'],
                     // @ts-ignore
                     defaultViewport: chromium.defaultViewport,
-                    executablePath,
+                    executablePath: await chromium.executablePath(
+                        `https://github.com/Sparticuz/chromium/releases/download/v123.0.1/chromium-v123.0.1-pack.tar`
+                    ),
                     // @ts-ignore
                     headless: chromium.headless,
                     // @ts-ignore - known issue with types
