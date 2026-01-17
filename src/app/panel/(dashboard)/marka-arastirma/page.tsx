@@ -325,7 +325,7 @@ export default function TrademarkSearchPage() {
                         </div>
                         <div className="text-center">
                             <h3 className="text-lg font-semibold text-gray-900">Lütfen bekleyiniz..</h3>
-                            <p className="text-sm text-gray-500 mt-1">Türk Patent sayfasından arama yapılıyor...</p>
+                            <p className="text-slate-500">PatentCan, Türk Patent sayfasında arama yapıyor..</p>
                             {showLongWaitMessage && (
                                 <p className="text-sm text-blue-600 font-medium mt-2 animate-pulse">
                                     Çok fazla kayıt var, veriler çekilmeye devam ediliyor..
