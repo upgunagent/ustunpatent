@@ -1,7 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Loader2, Search, FileText, Info, AlertTriangle } from "lucide-react";
+import { calculateBrandSimilarity, SimilarityResult } from "@/lib/brand-similarity";
+
+// Helper for similarity badge color
+const getSimilarityColor = (score: number) => {
+    if (score >= 70) return "bg-green-600";
+    if (score >= 50) return "bg-orange-500";
+    return "bg-red-600";
+};
 
 export default function TrademarkSearchPage() {
     const [loading, setLoading] = useState(false);
@@ -38,23 +46,45 @@ export default function TrademarkSearchPage() {
         );
     };
 
-    // Client-side filtering logic
-    const filteredResults = results.filter(item => {
-        if (selectedClasses.length === 0) return true;
-        if (!item.niceClasses) return false;
+    // Advanced Filtering & Sorting Logic
+    const filteredResults = useMemo(() => {
+        let processed = [...results];
 
-        // Normalize item classes (handle "30, 35", "30/35", "30\n35", etc.)
-        const itemClasses = item.niceClasses.toString()
-            .split(/[\n,/]+/) // Changed: added slash
-            .map((c: string) => c.trim().replace(/^0+/, ''))
-            .filter((c: string) => c.length > 0); // Changed: filter empty strings
+        // 1. Calculate Similarity & Attach to Object
+        if (searchParams.searchText) {
+            processed = processed.map(item => {
+                const markName = item.markName || "";
+                const similarity = calculateBrandSimilarity(searchParams.searchText, markName);
+                return { ...item, similarity };
+            });
+        }
 
-        // Check if ANY selected class matches
-        return selectedClasses.some(cls => {
-            const clsStr = cls.toString().replace(/^0+/, '');
-            return itemClasses.includes(clsStr);
+        // 2. Filter by Nice Classes
+        if (selectedClasses.length > 0) {
+            processed = processed.filter(item => {
+                if (!item.niceClasses) return false;
+                const itemClasses = item.niceClasses.toString()
+                    .split(/[\n,/]+/)
+                    .map((c: string) => c.trim().replace(/^0+/, ''))
+                    .filter((c: string) => c.length > 0);
+
+                return selectedClasses.some(cls => {
+                    const clsStr = cls.toString().replace(/^0+/, '');
+                    return itemClasses.includes(clsStr);
+                });
+            });
+        }
+
+        // 3. Sort by Similarity Score (Descending)
+        // If scores are equal or non-existent, keep original order
+        processed.sort((a, b) => {
+            const scoreA = a.similarity?.score || 0;
+            const scoreB = b.similarity?.score || 0;
+            return scoreB - scoreA;
         });
-    });
+
+        return processed;
+    }, [results, selectedClasses, searchParams.searchText]);
 
     // Loading timer effect
     useEffect(() => {
@@ -96,6 +126,7 @@ export default function TrademarkSearchPage() {
                 })
             });
             const data = await res.json();
+            setHasSearched(true); // Mark as searched
 
             // Handle debug info if present
             if (data.debug) {
@@ -407,10 +438,28 @@ export default function TrademarkSearchPage() {
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {filteredResults.map((item, idx) => (
-                                    <tr key={idx} className="bg-white hover:bg-slate-50 transition-colors">
+                                    <tr key={idx} className="bg-white hover:bg-slate-50 transition-colors group">
                                         <td className="px-4 py-4 text-center font-medium text-gray-500">{idx + 1}</td>
                                         <td className="px-4 py-4 font-medium">{item.applicationNo}</td>
-                                        <td className="px-4 py-4 font-bold text-gray-900">{item.markName}</td>
+                                        <td className="px-4 py-4 font-bold text-gray-900 relative pr-10">
+                                            {item.markName}
+                                            {item.similarity && item.similarity.score > 0 && (
+                                                <div className="absolute right-1 top-1/2 -translate-y-1/2 group/badge">
+                                                    <span className={`flex items-center justify-center w-5 h-5 md:w-6 md:h-6 rounded-full ${getSimilarityColor(item.similarity.score)} text-white text-[9px] font-bold shadow-sm z-10 border border-white`}>
+                                                        %{item.similarity.score}
+                                                    </span>
+                                                    {/* Tooltip */}
+                                                    <div className="invisible group-hover/badge:visible absolute right-full top-1/2 -translate-y-1/2 mr-2 w-48 bg-gray-900 text-white text-xs rounded p-2 z-50 shadow-xl">
+                                                        <div className="font-bold mb-1 border-b border-gray-700 pb-1">{item.similarity.reason}</div>
+                                                        <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] opacity-80">
+                                                            <span>Token: {item.similarity.details?.tokenScore}</span>
+                                                            <span>Harf: {Math.round(item.similarity.details?.charScore || 0)}</span>
+                                                            <span>Fonetik: {Math.round(item.similarity.details?.phoneticScore || 0)}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </td>
                                         <td className="px-4 py-4 text-gray-600 font-medium">{item.holderName}</td>
                                         <td className="px-4 py-4">{item.applicationDate}</td>
                                         <td className="px-4 py-4">{item.registrationNo || '-'}</td>
