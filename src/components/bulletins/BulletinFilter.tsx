@@ -6,6 +6,7 @@ import { Search, ChevronDown, ChevronUp, X, FilterX } from 'lucide-react';
 interface BulletinFilterProps {
     onFilterChange: (filters: FilterState) => void;
     initialFilters?: FilterState;
+    bulletinOptions: string[];
 }
 
 export interface FilterState {
@@ -14,7 +15,7 @@ export interface FilterState {
     classes: string[];
 }
 
-export default function BulletinFilter({ onFilterChange, initialFilters }: BulletinFilterProps) {
+export default function BulletinFilter({ onFilterChange, initialFilters, bulletinOptions }: BulletinFilterProps) {
     const [bulletinNo, setBulletinNo] = useState(initialFilters?.bulletinNo || '');
     const [markName, setMarkName] = useState(initialFilters?.markName || '');
     const [selectedClasses, setSelectedClasses] = useState<string[]>(initialFilters?.classes || []);
@@ -30,7 +31,7 @@ export default function BulletinFilter({ onFilterChange, initialFilters }: Bulle
     }, [initialFilters?.markName, initialFilters?.bulletinNo, initialFilters]);
 
     // Initial constants
-    const bulletinOptions = ['484']; // This can be dynamic later
+    // const bulletinOptions is now passed as prop
     const classOptions = Array.from({ length: 45 }, (_, i) => (i + 1).toString().padStart(2, '0'));
 
     const handleSearch = () => {

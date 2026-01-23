@@ -14,9 +14,10 @@ interface BulletinClientPageProps {
     currentPage: number;
     limit: number;
     isSearchMode: boolean; // Arama modu flag'i
+    bulletinOptions: string[];
 }
 
-export default function BulletinClientPage({ initialData, totalCount, currentPage, limit, isSearchMode }: BulletinClientPageProps) {
+export default function BulletinClientPage({ initialData, totalCount, currentPage, limit, isSearchMode, bulletinOptions }: BulletinClientPageProps) {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [isPending, startTransition] = useTransition();
@@ -124,7 +125,12 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
         <div className="space-y-6 relative">
 
 
-            <BulletinFilter onFilterChange={handleFilterChange} initialFilters={filters} />
+
+            <BulletinFilter
+                onFilterChange={handleFilterChange}
+                initialFilters={filters}
+                bulletinOptions={bulletinOptions}
+            />
 
             <div className="bg-white rounded-lg border border-gray-200 min-h-[400px]">
                 <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">

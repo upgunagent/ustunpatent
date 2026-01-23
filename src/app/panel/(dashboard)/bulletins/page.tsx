@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server';
 import { cookies } from 'next/headers';
 import { BulletinMark } from '@/components/bulletins/BulletinTable';
 import BulletinClientPage from './client-page';
+import { getAllBulletinIssues } from '@/lib/bulletin';
 
 export const dynamic = 'force-dynamic'; // Cachelemeyi önle
 export const revalidate = 0; // Her istekte taze veri
@@ -77,6 +78,10 @@ export default async function BulletinPage(props: {
         totalCount = count || 0;
     }
 
+    // Bülten numaralarını çek (Benzersiz olanları almak için tümünü çekip JS ile filtreliyoruz)
+    // 100k+ veri desteği için batched fetch kullanıyoruz
+    const bulletinOptions = await getAllBulletinIssues(supabase);
+
     return (
         <div className="p-6">
             <h1 className="text-2xl font-bold mb-6">Bültenler</h1>
@@ -87,6 +92,7 @@ export default async function BulletinPage(props: {
                 currentPage={page}
                 limit={50}
                 isSearchMode={isSearchMode}
+                bulletinOptions={bulletinOptions}
             />
         </div>
     );
