@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LucideLayoutDashboard, LucideMessageSquare, LucideLogOut, LucideFileText, LucideSearch } from "lucide-react";
+import { LucideLayoutDashboard, LucideMessageSquare, LucideLogOut, LucideFileText, LucideSearch, LucideBriefcase } from "lucide-react";
 import Image from "next/image";
 
 export default function AdminLayout({
@@ -51,6 +51,13 @@ export default function AdminLayout({
                     >
                         <LucideSearch size={24} />
                         Marka Araştırma
+                    </Link>
+                    <Link
+                        href="/panel/firms"
+                        className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium hover:bg-white/10 transition-colors"
+                    >
+                        <LucideBriefcase size={24} />
+                        Firmalar
                     </Link>
                     <div className="mt-auto pt-4 border-t border-white/10 pb-8">
                         <Link
