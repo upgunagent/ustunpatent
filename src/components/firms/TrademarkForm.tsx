@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { LucidePlus, LucideX, LucideSave, LucideCheckCircle } from 'lucide-react';
+import { LucidePlus, LucideX, LucideSave } from 'lucide-react';
 import { addTrademark, updateTrademark } from '@/actions/firms';
 import { useFormStatus } from 'react-dom';
 
@@ -44,6 +44,26 @@ export default function TrademarkForm({ firmId, onClose, initialData }: Trademar
         );
     };
 
+    // Keyword Logic
+    const initialKeywords = initialData?.search_keywords
+        ? initialData.search_keywords.split(',').filter(Boolean)
+        : [];
+    const [searchKeywords, setSearchKeywords] = useState<string[]>(initialKeywords);
+    const [keywordInput, setKeywordInput] = useState('');
+
+    const handleAddKeyword = () => {
+        if (!keywordInput.trim()) return;
+        // Avoid duplicates
+        if (!searchKeywords.includes(keywordInput.trim())) {
+            setSearchKeywords([...searchKeywords, keywordInput.trim()]);
+        }
+        setKeywordInput('');
+    };
+
+    const handleRemoveKeyword = (index: number) => {
+        setSearchKeywords(prev => prev.filter((_, i) => i !== index));
+    };
+
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
@@ -55,6 +75,7 @@ export default function TrademarkForm({ firmId, onClose, initialData }: Trademar
     const handleSubmit = async (formData: FormData) => {
         formData.append('firm_id', firmId);
         formData.append('classes', selectedClasses.join(','));
+        formData.append('search_keywords', searchKeywords.join(','));
 
         // If editing, append ID and existing logo URL (as fallback if no new file)
         if (isEditing) {
@@ -140,6 +161,48 @@ export default function TrademarkForm({ firmId, onClose, initialData }: Trademar
                             />
                         </div>
 
+                        <div className="md:col-span-2">
+                            <label className="text-sm font-medium text-gray-700 block mb-2">Marka Arama Kelimeleri</label>
+                            <div className="flex gap-2 mb-2">
+                                <input
+                                    type="text"
+                                    value={keywordInput}
+                                    onChange={(e) => setKeywordInput(e.target.value)}
+                                    placeholder="Kelime girip ekle deyin..."
+                                    className="flex h-10 flex-1 rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#001a4f]"
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            handleAddKeyword();
+                                        }
+                                    }}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={handleAddKeyword}
+                                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 font-medium text-sm flex items-center gap-1"
+                                >
+                                    <LucidePlus size={16} /> Ekle
+                                </button>
+                            </div>
+                            {searchKeywords.length > 0 && (
+                                <div className="flex flex-wrap gap-2 p-3 bg-gray-50 rounded-lg border border-gray-100">
+                                    {searchKeywords.map((keyword, idx) => (
+                                        <span key={idx} className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
+                                            {keyword}
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRemoveKeyword(idx)}
+                                                className="hover:text-red-500 transition-colors"
+                                            >
+                                                <LucideX size={14} />
+                                            </button>
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
                         <div className="grid gap-2">
                             <label className="text-sm font-medium text-gray-700">Hak Sahibi</label>
                             <input
@@ -209,6 +272,16 @@ export default function TrademarkForm({ firmId, onClose, initialData }: Trademar
                                 name="watch_end_date"
                                 type="date"
                                 defaultValue={initialData?.watch_end_date}
+                                className="flex h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#001a4f] focus:border-transparent"
+                            />
+                        </div>
+
+                        <div className="grid gap-2">
+                            <label className="text-sm font-medium text-gray-700">Tescil Tarihi</label>
+                            <input
+                                name="registration_date"
+                                type="date"
+                                defaultValue={initialData?.registration_date}
                                 className="flex h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#001a4f] focus:border-transparent"
                             />
                         </div>

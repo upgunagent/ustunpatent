@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LucideLayoutDashboard, LucideMessageSquare, LucideLogOut, LucideFileText, LucideSearch, LucideBriefcase } from "lucide-react";
+import { LucideLayoutDashboard, LucideMessageSquare, LucideLogOut, LucideFileText, LucideSearch, LucideBriefcase, LucideEye } from "lucide-react";
 import Image from "next/image";
 
 export default function AdminLayout({
@@ -44,6 +44,13 @@ export default function AdminLayout({
                     >
                         <LucideFileText size={24} />
                         Bültenler
+                    </Link>
+                    <Link
+                        href="/panel/marka-izleme"
+                        className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium hover:bg-white/10 transition-colors"
+                    >
+                        <LucideEye size={24} />
+                        Marka İzleme
                     </Link>
                     <Link
                         href="/panel/marka-arastirma"

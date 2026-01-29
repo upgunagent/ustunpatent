@@ -24,6 +24,8 @@ export interface BulletinMark {
 
 interface BulletinTableProps {
     data: BulletinMark[];
+    highlightedClasses?: string[];
+    onCompare?: (mark: BulletinMark) => void;
 }
 
 // Helper for similarity badge color
@@ -33,7 +35,7 @@ const getSimilarityColor = (score: number) => {
     return "bg-red-600";
 };
 
-export default function BulletinTable({ data }: BulletinTableProps) {
+export default function BulletinTable({ data, highlightedClasses = [], onCompare }: BulletinTableProps) {
     const [selectedLogo, setSelectedLogo] = useState<string | null>(null);
     const [copyFeedback, setCopyFeedback] = useState<{ x: number, y: number, show: boolean }>({ x: 0, y: 0, show: false });
 
@@ -56,6 +58,31 @@ export default function BulletinTable({ data }: BulletinTableProps) {
 
     // Helper to extract only 2-digit class numbers
     const formatClasses = (text: string) => {
+        if (!text) return null;
+        const matches = text.match(/\b\d{2}\b/g);
+        if (!matches) return null;
+
+        const uniqueClasses = [...new Set(matches)];
+
+        return (
+            <span>
+                {uniqueClasses.map((cls, idx) => {
+                    const isHighlighted = highlightedClasses.includes(cls);
+                    return (
+                        <span key={cls}>
+                            <span className={isHighlighted ? "text-red-600 font-bold" : ""}>
+                                {cls}
+                            </span>
+                            {idx < uniqueClasses.length - 1 && ", "}
+                        </span>
+                    );
+                })}
+            </span>
+        );
+    };
+
+    // For copy functionality, we need plain text
+    const getClassesPlainText = (text: string) => {
         if (!text) return "";
         const matches = text.match(/\b\d{2}\b/g);
         if (!matches) return "";
@@ -122,6 +149,13 @@ export default function BulletinTable({ data }: BulletinTableProps) {
                             </th>
                             <ResizableTh title="Çıkartılan İçerikler" initialWidth={140} />
                             <ResizableTh title="Viyana Sınıfı" initialWidth={110} />
+                            <th
+                                className="px-1 py-1 md:px-2 md:py-2 text-center text-[10px] md:text-[11px] lg:text-xs font-medium text-gray-500 uppercase tracking-tight bg-gray-50 border-r border-gray-200 relative group select-none w-auto"
+                            >
+                                <div className="flex items-center justify-center h-full overflow-hidden">
+                                    <span className="block w-full truncate">İşlemler</span>
+                                </div>
+                            </th>
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
@@ -205,7 +239,7 @@ export default function BulletinTable({ data }: BulletinTableProps) {
                                 <td
                                     className="px-2 py-1.5 md:px-3 md:py-2 whitespace-nowrap text-[10px] md:text-[11px] lg:text-xs text-gray-500 overflow-hidden text-ellipsis max-w-0 cursor-pointer active:bg-blue-50"
                                     title={mark.nice_classes_511}
-                                    onClick={(e) => handleCopy(formatClasses(mark.nice_classes_511), e)}
+                                    onClick={(e) => handleCopy(getClassesPlainText(mark.nice_classes_511), e)}
                                 >
                                     {formatClasses(mark.nice_classes_511)}
                                 </td>
@@ -230,45 +264,67 @@ export default function BulletinTable({ data }: BulletinTableProps) {
                                 >
                                     {mark.viyana_sinifi}
                                 </td>
+                                <td className="px-1 py-1 text-center font-medium">
+                                    {onCompare && (
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onCompare(mark);
+                                            }}
+                                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                            title="Karşılaştır"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-file-diff">
+                                                <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+                                                <path d="M12 13V7" />
+                                                <path d="M9 10h6" />
+                                            </svg>
+                                        </button>
+                                    )}
+                                </td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
-            </div>
+            </div >
 
-            {copyFeedback.show && (
-                <div
-                    className="fixed z-50 bg-black/80 text-white text-xs px-2 py-1 rounded shadow-lg pointer-events-none transform -translate-x-1/2 -translate-y-full transition-opacity"
-                    style={{ left: copyFeedback.x, top: copyFeedback.y - 10 }}
-                >
-                    Kopyalandı
-                </div>
-            )}
-
-            {selectedLogo && (
-                <div
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-                    onClick={() => setSelectedLogo(null)}
-                >
+            {
+                copyFeedback.show && (
                     <div
-                        className="relative bg-white p-2 rounded-lg max-w-2xl max-h-[90vh] overflow-hidden"
-                        onClick={(e) => e.stopPropagation()}
+                        className="fixed z-50 bg-black/80 text-white text-xs px-2 py-1 rounded shadow-lg pointer-events-none transform -translate-x-1/2 -translate-y-full transition-opacity"
+                        style={{ left: copyFeedback.x, top: copyFeedback.y - 10 }}
                     >
-                        <button
-                            className="absolute top-2 right-2 p-1 bg-white rounded-full text-black hover:bg-gray-200"
-                            onClick={() => setSelectedLogo(null)}
-                        >
-                            <X size={24} />
-                        </button>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                            src={selectedLogo}
-                            alt="Büyük Logo"
-                            className="max-w-full max-h-[85vh] object-contain"
-                        />
+                        Kopyalandı
                     </div>
-                </div>
-            )}
+                )
+            }
+
+            {
+                selectedLogo && (
+                    <div
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+                        onClick={() => setSelectedLogo(null)}
+                    >
+                        <div
+                            className="relative bg-white p-2 rounded-lg max-w-2xl max-h-[90vh] overflow-hidden"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <button
+                                className="absolute top-2 right-2 p-1 bg-white rounded-full text-black hover:bg-gray-200"
+                                onClick={() => setSelectedLogo(null)}
+                            >
+                                <X size={24} />
+                            </button>
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                                src={selectedLogo}
+                                alt="Büyük Logo"
+                                className="max-w-full max-h-[85vh] object-contain"
+                            />
+                        </div>
+                    </div>
+                )
+            }
         </>
     );
 }

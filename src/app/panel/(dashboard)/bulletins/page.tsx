@@ -46,7 +46,7 @@ export default async function BulletinPage(props: {
         const BATCH_SIZE = 1000;
 
         while (hasMore) {
-            console.log(`Fetching batch: ${batchOffset} - ${batchOffset + BATCH_SIZE}`);
+            // console.log(`Fetching batch: ${batchOffset} - ${batchOffset + BATCH_SIZE}`);
             const { data, error } = await supabase
                 .from('bulletin_marks')
                 .select('*')

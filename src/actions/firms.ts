@@ -94,7 +94,9 @@ export async function addTrademark(formData: FormData) {
         start_bulletin_no: formData.get('start_bulletin_no'),
         watch_start_date: formData.get('watch_start_date') || null,
         watch_end_date: formData.get('watch_end_date') || null,
+        registration_date: formData.get('registration_date') || null,
         consultant_name: formData.get('consultant_name'),
+        search_keywords: formData.get('search_keywords'), // Add search keywords
     };
 
     const { error } = await supabase
@@ -153,7 +155,9 @@ export async function updateTrademark(formData: FormData) {
         start_bulletin_no: formData.get('start_bulletin_no'),
         watch_start_date: formData.get('watch_start_date') || null,
         watch_end_date: formData.get('watch_end_date') || null,
+        registration_date: formData.get('registration_date') || null,
         consultant_name: formData.get('consultant_name'),
+        search_keywords: formData.get('search_keywords'), // Add search keywords
     };
 
     const { error } = await supabase
@@ -185,4 +189,49 @@ export async function updateFirm(firmId: string, data: any) {
 
     revalidatePath(`/panel/firms/${firmId}`);
     return { success: true };
+}
+
+export async function getFirmsForSelect(query: string = '') {
+    const supabase = await createClient();
+
+    let dbQuery = supabase
+        .from('firms')
+        .select('id, name, corporate_title, individual_name_surname, tpmk_owner_no')
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+    if (query) {
+        const q = query.trim();
+        dbQuery = dbQuery.or(`corporate_title.ilike.%${q}%,individual_name_surname.ilike.%${q}%,tpmk_owner_no.ilike.%${q}%`);
+    }
+
+    const { data, error } = await dbQuery;
+
+    if (error) {
+        console.error('Error fetching firms for select:', error);
+        return [];
+    }
+
+    return data.map(firm => ({
+        id: firm.id,
+        label: firm.corporate_title || firm.individual_name_surname || firm.name,
+        subLabel: firm.tpmk_owner_no
+    }));
+}
+
+export async function getFirmTrademarks(firmId: string) {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+        .from('firm_trademarks')
+        .select('*')
+        .eq('firm_id', firmId)
+        .order('name', { ascending: true });
+
+    if (error) {
+        console.error('Error fetching firm trademarks:', error);
+        return [];
+    }
+
+    return data;
 }
