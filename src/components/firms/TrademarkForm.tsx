@@ -286,6 +286,16 @@ export default function TrademarkForm({ firmId, onClose, initialData }: Trademar
                             />
                         </div>
 
+                        <div className="grid gap-2">
+                            <label className="text-sm font-medium text-gray-700">Tescil No</label>
+                            <input
+                                name="registration_no"
+                                type="text"
+                                defaultValue={initialData?.registration_no}
+                                className="flex h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#001a4f] focus:border-transparent"
+                            />
+                        </div>
+
                         <div className="grid gap-2 md:col-span-2">
                             <label className="text-sm font-medium text-gray-700">Danışman Adı</label>
                             <input

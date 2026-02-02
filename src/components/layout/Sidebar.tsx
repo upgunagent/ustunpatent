@@ -3,14 +3,14 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { LucideFileText, LucideSearch, LucideBriefcase, LucideEye, LucideLogOut } from "lucide-react";
-import { cn } from "@/lib/utils"; // Assuming utils exists, or I will use clsx/tailwind-merge directly if not sure. 
-// Checking package.json, clsx and tailwind-merge are present. 
-// I'll check if @/lib/utils is available, usually it is in shadcn-like setups.
-// If not, I'll just use template literals to be safe for now or define a simple helper.
+import { LucideFileText, LucideSearch, LucideBriefcase, LucideEye, LucideLogOut, LucideLock } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useState } from 'react';
+import ChangePasswordModal from "./ChangePasswordModal";
 
 export default function Sidebar() {
     const pathname = usePathname();
+    const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
     const isActive = (href: string) => {
         return pathname.startsWith(href);
@@ -78,7 +78,15 @@ export default function Sidebar() {
                     <LucideBriefcase size={24} />
                     Firmalar
                 </Link>
-                <div className="mt-auto pt-4 border-t border-white/10 pb-8">
+
+                <div className="mt-auto pt-4 border-t border-white/10 pb-8 space-y-1">
+                    <button
+                        onClick={() => setIsPasswordModalOpen(true)}
+                        className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-gray-300 hover:bg-white/10 hover:text-white transition-colors"
+                    >
+                        <LucideLock size={18} />
+                        Şifre Değiştir
+                    </button>
                     <Link
                         href="/login"
                         className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-red-500 hover:bg-red-500/10"
@@ -88,6 +96,10 @@ export default function Sidebar() {
                     </Link>
                 </div>
             </nav>
+
+            {isPasswordModalOpen && (
+                <ChangePasswordModal onClose={() => setIsPasswordModalOpen(false)} />
+            )}
         </aside>
     );
 }

@@ -1,5 +1,104 @@
+'use client';
+
 import { login } from "./actions";
 import Image from "next/image";
+import { useState, Suspense, useEffect } from "react";
+import ForgotPasswordModal from "@/components/auth/ForgotPasswordModal";
+import { useSearchParams } from "next/navigation";
+import { toast } from "sonner";
+import { LucideAlertCircle } from "lucide-react";
+
+function LoginForm() {
+    const [isForgotModalOpen, setIsForgotModalOpen] = useState(false);
+    const searchParams = useSearchParams();
+    const errorWithParams = searchParams.get('error');
+
+    useEffect(() => {
+        if (errorWithParams) {
+            toast.error(decodeURIComponent(errorWithParams));
+        }
+    }, [errorWithParams]);
+
+    return (
+        <div className="flex w-full flex-col items-center justify-center bg-white p-8 lg:w-1/2">
+            <div className="w-full max-w-sm space-y-6">
+                <div className="flex flex-col space-y-2 text-center">
+                    <h1 className="text-2xl font-semibold tracking-tight text-[#001a4f]">
+                        Yönetici Girişi
+                    </h1>
+                    <p className="text-sm text-gray-500">
+                        Panele erişmek için bilgilerinizi giriniz
+                    </p>
+                </div>
+
+                {errorWithParams && (
+                    <div className="rounded-lg bg-red-50 p-4 flex items-center gap-3 text-red-600 text-sm">
+                        <LucideAlertCircle size={20} />
+                        <p>{decodeURIComponent(errorWithParams)}</p>
+                    </div>
+                )}
+
+                <div className="rounded-xl border border-gray-200 bg-white p-8 shadow-2xl shadow-gray-100">
+                    <form className="grid gap-6">
+                        <div className="grid gap-2">
+                            <label
+                                htmlFor="email"
+                                className="text-xs font-medium uppercase tracking-wide text-gray-500"
+                            >
+                                E-posta
+                            </label>
+                            <input
+                                id="email"
+                                name="email"
+                                type="email"
+                                placeholder="ornek@ustunpatent.com"
+                                required
+                                className="flex h-11 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 transition-colors focus:border-[#001a4f] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#001a4f] placeholder:text-gray-400"
+                            />
+                        </div>
+                        <div className="grid gap-2">
+                            <div className="flex items-center justify-between">
+                                <label
+                                    htmlFor="password"
+                                    className="text-xs font-medium uppercase tracking-wide text-gray-500"
+                                >
+                                    Şifre
+                                </label>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsForgotModalOpen(true)}
+                                    className="text-xs font-medium text-[#001a4f] hover:underline"
+                                >
+                                    Şifremi Unuttum
+                                </button>
+                            </div>
+                            <input
+                                id="password"
+                                name="password"
+                                type="password"
+                                required
+                                className="flex h-11 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 transition-colors focus:border-[#001a4f] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#001a4f]"
+                            />
+                        </div>
+                        <button
+                            formAction={login}
+                            className="inline-flex h-11 w-full items-center justify-center rounded-lg bg-[#001a4f] px-8 text-sm font-medium text-white transition-colors hover:bg-[#002366] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#001a4f] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 mt-2"
+                        >
+                            Giriş Yap
+                        </button>
+                    </form>
+                </div>
+                <p className="px-8 text-center text-sm text-gray-400">
+                    &copy; 2026 Üstün Patent. Tüm hakları saklıdır.
+                </p>
+            </div>
+
+            {isForgotModalOpen && (
+                <ForgotPasswordModal onClose={() => setIsForgotModalOpen(false)} />
+            )}
+        </div>
+    );
+}
 
 export default function LoginPage() {
     return (
@@ -28,66 +127,9 @@ export default function LoginPage() {
                 </div>
             </div>
 
-            {/* Right Side - Login Form (White) */}
-            <div className="flex w-full flex-col items-center justify-center bg-white p-8 lg:w-1/2">
-                <div className="w-full max-w-sm space-y-6">
-                    <div className="flex flex-col space-y-2 text-center">
-                        <h1 className="text-2xl font-semibold tracking-tight text-[#001a4f]">
-                            Yönetici Girişi
-                        </h1>
-                        <p className="text-sm text-gray-500">
-                            Panele erişmek için bilgilerinizi giriniz
-                        </p>
-                    </div>
-
-                    <div className="rounded-xl border border-gray-200 bg-white p-8 shadow-2xl shadow-gray-100">
-                        <form className="grid gap-6">
-                            <div className="grid gap-2">
-                                <label
-                                    htmlFor="email"
-                                    className="text-xs font-medium uppercase tracking-wide text-gray-500"
-                                >
-                                    E-posta
-                                </label>
-                                <input
-                                    id="email"
-                                    name="email"
-                                    type="email"
-                                    placeholder="ornek@ustunpatent.com"
-                                    required
-                                    className="flex h-11 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 transition-colors focus:border-[#001a4f] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#001a4f] placeholder:text-gray-400"
-                                />
-                            </div>
-                            <div className="grid gap-2">
-                                <div className="flex items-center justify-between">
-                                    <label
-                                        htmlFor="password"
-                                        className="text-xs font-medium uppercase tracking-wide text-gray-500"
-                                    >
-                                        Şifre
-                                    </label>
-                                </div>
-                                <input
-                                    id="password"
-                                    name="password"
-                                    type="password"
-                                    required
-                                    className="flex h-11 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 transition-colors focus:border-[#001a4f] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#001a4f]"
-                                />
-                            </div>
-                            <button
-                                formAction={login}
-                                className="inline-flex h-11 w-full items-center justify-center rounded-lg bg-[#001a4f] px-8 text-sm font-medium text-white transition-colors hover:bg-[#002366] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#001a4f] focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 mt-2"
-                            >
-                                Giriş Yap
-                            </button>
-                        </form>
-                    </div>
-                    <p className="px-8 text-center text-sm text-gray-400">
-                        &copy; 2026 Üstün Patent. Tüm hakları saklıdır.
-                    </p>
-                </div>
-            </div>
+            <Suspense fallback={<div className="flex w-full items-center justify-center bg-white p-8 lg:w-1/2">Yükleniyor...</div>}>
+                <LoginForm />
+            </Suspense>
         </div>
     );
 }

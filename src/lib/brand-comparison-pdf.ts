@@ -13,6 +13,7 @@ interface WatchedTrademark {
     classes?: string;
     application_no?: string;
     registration_date?: string;
+    registration_no?: string;
 }
 
 // Define Firm Details Interface
@@ -280,7 +281,7 @@ export const generateBrandComparisonPDF = async (
         `Başvuru Tarihi: -`,
         `Başvuru No: ${watchedMark.application_no || '-'}`,
         `Tescil Tarihi: ${safeDate(watchedMark.registration_date || '')}`,
-        `Tescil No: ${watchedMark.application_no || '-'}`
+        `Tescil No: ${watchedMark.registration_no || '-'}`
     ];
 
     // Column 2 Content

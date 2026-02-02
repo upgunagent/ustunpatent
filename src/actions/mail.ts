@@ -2,6 +2,57 @@
 
 import { createClient } from '@/lib/supabase/server';
 
+// Generic Email Sender Helper
+export async function sendEmail(
+    to: string,
+    subject: string,
+    text: string,
+    attachments: { filename: string, content: string | Buffer }[] = [],
+    html?: string
+) {
+    try {
+        const nodemailer = require('nodemailer');
+
+        const host = process.env.SMTP_HOST || 'smtp-mail.outlook.com'; // Fallback
+
+        console.log("SMTP Config Check:", {
+            host: host,
+            port: process.env.SMTP_PORT,
+            user: process.env.SMTP_USER ? '***' : 'MISSING',
+            pass: process.env.SMTP_PASSWORD ? '***' : 'MISSING'
+        });
+
+        const transporter = nodemailer.createTransport({
+            host: host,
+            port: Number(process.env.SMTP_PORT),
+            secure: false, // STARTTLS
+            auth: {
+                user: process.env.SMTP_USER,
+                pass: process.env.SMTP_PASSWORD,
+            },
+            tls: {
+                ciphers: 'SSLv3'
+            }
+        });
+
+        console.log(`Sending email to ${to}...`);
+        await transporter.sendMail({
+            from: '"Üstün Patent" <web@ustunpatent.com>',
+            to: to,
+            subject: subject,
+            text: text,
+            html: html,
+            attachments: attachments
+        });
+
+        return { success: true };
+    } catch (error: any) {
+        console.error("Mail Send Error:", error);
+        return { success: false, message: error.message };
+    }
+}
+
+// Specific Action for Trademark Notifications
 export async function sendTrademarkNotification(
     firmId: string,
     emailContent: string,
@@ -9,9 +60,6 @@ export async function sendTrademarkNotification(
     attachmentData: { filename: string, content: string }[]
 ) {
     try {
-        // Dynamic import to avoid bundling issues
-        const nodemailer = require('nodemailer');
-
         const supabase = await createClient();
 
         // 1. Fetch Firm Email
@@ -38,37 +86,20 @@ export async function sendTrademarkNotification(
             return { success: false, message: 'Firmaya ait kayıtlı e-posta adresi bulunamadı.' };
         }
 
-        // 2. Configure Transporter
-        const transporter = nodemailer.createTransport({
-            host: process.env.SMTP_HOST,
-            port: Number(process.env.SMTP_PORT),
-            secure: false, // STARTTLS
-            auth: {
-                user: process.env.SMTP_USER,
-                pass: process.env.SMTP_PASSWORD,
-            },
-            tls: {
-                ciphers: 'SSLv3'
-            }
-        });
-
-        // 3. Process Attachments
+        // 2. Process Attachments
         const attachments = attachmentData.map(item => ({
             filename: item.filename.endsWith('.pdf') ? item.filename : `${item.filename}.pdf`,
             content: Buffer.from(item.content, 'base64')
         }));
 
-        // 4. Send Email
-        console.log(`Sending email to ${toEmail} with ${attachments.length} attachments...`);
-        await transporter.sendMail({
-            from: '"Üstün Patent" <web@ustunpatent.com>',
-            to: toEmail,
-            subject: subject,
-            text: emailContent,
-            attachments: attachments
-        });
+        // 3. Send Email using Helper
+        const result = await sendEmail(toEmail, subject, emailContent, attachments);
 
-        // 5. Log to Database
+        if (!result.success) {
+            return { success: false, message: `Sunucu hatası: ${result.message}` };
+        }
+
+        // 4. Log to Database
         const { error: logError } = await supabase
             .from('firm_actions')
             .insert({
@@ -93,7 +124,7 @@ export async function sendTrademarkNotification(
         return { success: true, message: 'Benzer marka karşılaştırma raporlarınız firmaya iletilmiştir.' };
 
     } catch (error: any) {
-        console.error("Mail Send Error Full:", error);
+        console.error("Mail Check Error:", error);
         return {
             success: false,
             message: `Sunucu hatası: ${error.message || 'Bilinmeyen hata'}`
@@ -102,28 +133,9 @@ export async function sendTrademarkNotification(
 }
 
 export async function sendTestMailAction() {
-    try {
-        const nodemailer = require('nodemailer');
-        const transporter = nodemailer.createTransport({
-            host: process.env.SMTP_HOST,
-            port: Number(process.env.SMTP_PORT),
-            secure: false,
-            auth: {
-                user: process.env.SMTP_USER,
-                pass: process.env.SMTP_PASSWORD,
-            },
-            tls: { ciphers: 'SSLv3' }
-        });
-
-        await transporter.sendMail({
-            from: '"Test" <web@ustunpatent.com>',
-            to: "ozgur@upgunai.com",
-            subject: "Uygulama İçi Test Maili",
-            text: "Bu mail uygulamadan başarıyla gönderildi."
-        });
-        return { success: true, message: 'Test maili gönderildi.' };
-    } catch (error: any) {
-        console.error("Test Mail Error:", error);
-        return { success: false, message: error.message };
-    }
+    return sendEmail(
+        "ozgur@upgunai.com",
+        "Uygulama İçi Test Maili",
+        "Bu mail uygulamadan başarıyla gönderildi."
+    );
 }
