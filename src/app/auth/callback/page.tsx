@@ -14,7 +14,7 @@ function AuthCallbackContent() {
         const supabase = createClient();
         const next = searchParams.get('next') || '/panel/change-password';
 
-        // Listen for Auth State Changes (The reliable way for Hash flow)
+        // 1. Setup Listener (Automatic handling)
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
             console.log("Auth Event:", event);
             if (event === 'SIGNED_IN' || event === 'PASSWORD_RECOVERY') {
@@ -26,7 +26,7 @@ function AuthCallbackContent() {
         });
 
         const handleAuth = async () => {
-            // 1. Check for errors
+            // 2. Check for explicit error params
             const error = searchParams.get('error');
             if (error) {
                 console.error("Auth Error (Params):", error);
@@ -34,7 +34,7 @@ function AuthCallbackContent() {
                 return;
             }
 
-            // 2. PKCE Code Exchange (Explicit)
+            // 3. Check for PKCE Code
             const code = searchParams.get('code');
             if (code) {
                 setStatus('Kod doğrulanıyor...');
@@ -46,29 +46,56 @@ function AuthCallbackContent() {
                 return;
             }
 
-            // 3. Implicit Hash Check (Access Token)
+            // 4. Check for Implicit Hash (access_token)
             const hash = window.location.hash;
             if (hash && (hash.includes('access_token') || hash.includes('type=recovery'))) {
-                setStatus('Oturum açılıyor...');
-                // The onAuthStateChange listener will handle the redirect.
-                // We just wait here. 
+                setStatus('Oturum anahtarı işleniyor...');
 
-                // Fallback timeout if nothing happens in 5 seconds
+                // MANUAL PARSING: Force session set if auto-detection is slow
+                try {
+                    // Remove # and parse
+                    const hashParams = new URLSearchParams(hash.substring(1));
+                    const accessToken = hashParams.get('access_token');
+                    const refreshToken = hashParams.get('refresh_token');
+                    const type = hashParams.get('type');
+
+                    if (accessToken && refreshToken) {
+                        console.log("Manual token parsing successful");
+                        const { error: setSessionError } = await supabase.auth.setSession({
+                            access_token: accessToken,
+                            refresh_token: refreshToken
+                        });
+
+                        if (!setSessionError) {
+                            console.log("Manual session set successful");
+                            router.replace(next);
+                            return;
+                        } else {
+                            console.error("Manual SetSession Error:", setSessionError);
+                        }
+                    }
+                } catch (e) {
+                    console.error("Manual parsing failed:", e);
+                }
+
+                // Fallback: Wait for listener or check session one last time
                 setTimeout(async () => {
                     const { data: { session } } = await supabase.auth.getSession();
                     if (!session) {
                         console.error("Session Missing Timeout");
-                        // Don't redirect error immediately, just log. 
-                        // User might be stuck strictly speaking, but redirecting to error premature is annoying.
-                        // But if 5 seconds passed and no session, likely failed.
-                        router.replace('/auth/auth-code-error?error=Timeout&error_description=Oturum zaman aşımı.');
+                        // Check one more time just in case
+                        const { data: { session: retrySession } } = await supabase.auth.getSession();
+                        if (retrySession) {
+                            router.replace(next);
+                        } else {
+                            router.replace('/auth/auth-code-error?error=Timeout&error_description=Oturum zaman aşımı. Lütfen tekrar deneyin.');
+                        }
                     } else {
                         router.replace(next);
                     }
-                }, 5000);
+                }, 4000);
             } else if (!code && !hash) {
-                // 4. No Code/Hash found
-                // Check if we are already logged in?
+                // 5. No Code/Hash found - Check explicit session
                 const { data: { session } } = await supabase.auth.getSession();
                 if (session) {
                     router.replace(next);
