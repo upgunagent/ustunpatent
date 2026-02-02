@@ -40,12 +40,12 @@ export async function sendTrademarkNotification(
 
         // 2. Configure Transporter
         const transporter = nodemailer.createTransport({
-            host: "smtp-mail.outlook.com",
-            port: 587,
+            host: process.env.SMTP_HOST,
+            port: Number(process.env.SMTP_PORT),
             secure: false, // STARTTLS
             auth: {
-                user: "web@ustunpatent.com",
-                pass: "Ustunveb!2026",
+                user: process.env.SMTP_USER,
+                pass: process.env.SMTP_PASSWORD,
             },
             tls: {
                 ciphers: 'SSLv3'
@@ -105,12 +105,12 @@ export async function sendTestMailAction() {
     try {
         const nodemailer = require('nodemailer');
         const transporter = nodemailer.createTransport({
-            host: "smtp-mail.outlook.com",
-            port: 587,
+            host: process.env.SMTP_HOST,
+            port: Number(process.env.SMTP_PORT),
             secure: false,
             auth: {
-                user: "web@ustunpatent.com",
-                pass: "Ustunveb!2026",
+                user: process.env.SMTP_USER,
+                pass: process.env.SMTP_PASSWORD,
             },
             tls: { ciphers: 'SSLv3' }
         });
