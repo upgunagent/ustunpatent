@@ -10,9 +10,12 @@ import BulletinTable, { BulletinMark } from '@/components/bulletins/BulletinTabl
 import PaginationControl from '@/components/bulletins/PaginationControl';
 import { calculateBrandSimilarity } from '@/lib/brand-similarity';
 import { generateBrandComparisonPDF } from '@/lib/brand-comparison-pdf';
+import { LucideMail, LucideFileText, LucideTrash2, LucideSend } from 'lucide-react';
+import { sendTrademarkNotification } from '@/actions/mail';
+import { toast } from 'sonner';
 
 import { FirmCombobox } from '@/components/firms/FirmCombobox';
-import { getFirmTrademarks } from '@/actions/firms';
+import { getFirmTrademarks, getFirm } from '@/actions/firms';
 import { searchBulletinMarks } from '@/actions/bulletins';
 
 interface BulletinClientPageProps {
@@ -32,6 +35,7 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
     // Local State
     const [selectedBulletin, setSelectedBulletin] = useState<string>('');
     const [selectedFirmId, setSelectedFirmId] = useState<string>('');
+    const [selectedFirm, setSelectedFirm] = useState<any>(null);
     const [firmTrademarks, setFirmTrademarks] = useState<any[]>([]);
     const [loadingTrademarks, setLoadingTrademarks] = useState(false);
     const [searchedMarkName, setSearchedMarkName] = useState('');
@@ -42,6 +46,13 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
     // New States for Keywords
     const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
     const [currentWatchedMark, setCurrentWatchedMark] = useState<any>(null);
+
+    // Mail Queue State
+    const [mailQueue, setMailQueue] = useState<any[]>([]);
+    const [isMailModalOpen, setIsMailModalOpen] = useState(false);
+    const [mailSubject, setMailSubject] = useState('');
+    const [mailContent, setMailContent] = useState('');
+    const [isSendingMail, setIsSendingMail] = useState(false);
 
     // Client-side pagination state
     const [clientPage, setClientPage] = useState(1);
@@ -62,8 +73,11 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
             getFirmTrademarks(selectedFirmId)
                 .then(setFirmTrademarks)
                 .finally(() => setLoadingTrademarks(false));
+
+            getFirm(selectedFirmId).then(setSelectedFirm);
         } else {
             setFirmTrademarks([]);
+            setSelectedFirm(null);
         }
     }, [selectedFirmId]);
 
@@ -77,8 +91,214 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
             console.error("Watched mark not found");
             return;
         }
-        const url = await generateBrandComparisonPDF(watchedMark, similarMark);
-        setPreviewUrl(url.toString());
+        const url = await generateBrandComparisonPDF(watchedMark, similarMark, selectedFirm);
+        setPreviewUrl(url.toString()); // Keep preview URL
+        // Store temporary data for adding to mail queue if requested
+        (window as any).currentPDFData = {
+            watchedMark,
+            similarMark,
+            firm: selectedFirm
+        };
+    };
+
+    const handleAddToMailQueue = async () => {
+        const data = (window as any).currentPDFData;
+        if (!data) return;
+
+        try {
+            // Regenerate Blob (since previewUrl is just a string, we want a fresh Blob to store)
+            // Or retrieve blob from url if possible? 
+            // Better to regenerate to be safe and consistent.
+            const blobUrl = await generateBrandComparisonPDF(data.watchedMark, data.similarMark, data.firm);
+            const response = await fetch(blobUrl);
+            const blob = await response.blob();
+
+            const filename = `${data.watchedMark.name}-${data.similarMark.mark_text_540}.pdf`;
+
+            setMailQueue(prev => [...prev, {
+                id: Date.now(),
+                blob,
+                filename,
+                similarMarkName: data.similarMark.mark_text_540,
+                watchedMarkName: data.watchedMark.name,
+                watchedMarkClasses: data.watchedMark.classes,
+                bulletinNo: data.similarMark.issue_no // Store bulletin No
+            }]);
+
+            toast.success('Rapor mail kuyruğuna eklendi.');
+            setPreviewUrl(null); // Close preview
+        } catch (e) {
+            console.error(e);
+            toast.error('Rapor eklenirken hata oluştu.');
+        }
+    };
+
+    const openMailModal = () => {
+        if (mailQueue.length === 0) {
+            toast.error('Mail kuyruğu boş.');
+            return;
+        }
+
+        const date = new Date();
+        const monthName = date.toLocaleString('tr-TR', { month: 'long' });
+        const year = date.getFullYear();
+        const dateStr = date.toLocaleDateString('tr-TR');
+        // Calculate Bulletin No String
+        const bulletinNumbers = Array.from(new Set(mailQueue.map(item => item.bulletinNo))).filter(Boolean).sort();
+        let bulletinNoStr = '';
+        if (bulletinNumbers.length === 0) {
+            bulletinNoStr = selectedBulletin || '...';
+        } else if (bulletinNumbers.length === 1) {
+            bulletinNoStr = bulletinNumbers[0];
+        } else {
+            const last = bulletinNumbers.pop();
+            bulletinNoStr = `${bulletinNumbers.join(', ')} ve ${last}`;
+        }
+        const uniqueWatchedMarks = new Map();
+        mailQueue.forEach(item => {
+            if (!uniqueWatchedMarks.has(item.watchedMarkName)) {
+                uniqueWatchedMarks.set(item.watchedMarkName, item.watchedMarkClasses);
+            }
+        });
+
+        const markDetailsParts: string[] = [];
+        uniqueWatchedMarks.forEach((classes, name) => {
+            markDetailsParts.push(`${name} / ${classes}`);
+        });
+        const markDetailsStr = markDetailsParts.join(', ');
+
+        // Consultant
+        // Try to find consultant from one of the queue items or firm
+        // For simplicity use firm rep or empty
+        const consultantName = selectedFirm?.representative || '(Danışman Adı)';
+
+        const similarMarksList = mailQueue.map(item => `- ${item.similarMarkName} (${item.watchedMarkName} markasının benzer markası)`).join('\n');
+
+        const subject = `Bülten Takibi/${year} ${monthName} Ayı Benzer Markaya Rastlanıldı !!!`;
+
+        const content = `Merhabalar,
+
+Türk Patent ve Marka Kurumu nezdinde adınıza başvurusu yapılmış/ tescillenmiş olan markalarınızın,
+6769 Sayılı Sınai Mülkiyet Kanunu hükümlerine göre düzenli olarak yayınlanan Resmi Marka Bültenlerinde izlemesini yapıyoruz.
+
+${dateStr} tarih ve ${bulletinNoStr} sayılı Resmi Marka Bülteninde yaptığımız inceleme neticesinde hak sahibi olduğunuz ${markDetailsStr} sınıflarında (eş/benzer) marka başvurusu tespit edilmiştir. Detaylı bilgi ekte iletilmiştir.
+
+Markalarınız açısından risk teşkil ettiği kanaatindeyseniz tescili alınmadan gerekli itirazın yapılması önerimizdir.
+Süreli işlemler olduğundan konu ile alakalı geri bildirim yapmanızı rica ederiz.
+
+Markalar;
+${similarMarksList}
+
+Saygılarımla
+${consultantName}`;
+
+        setMailSubject(subject);
+        setMailContent(content);
+        setIsMailModalOpen(true);
+    };
+
+    const handleNoMatchMail = () => {
+        const date = new Date();
+        const monthName = date.toLocaleString('tr-TR', { month: 'long' });
+        const year = date.getFullYear();
+        const dateStr = date.toLocaleDateString('tr-TR');
+        const bulletinNoStr = '***BÜLTEN NUMARASINI YAZIN***';
+        const consultantName = selectedFirm?.representative || '(Danışman Adı)';
+
+        const marksList = firmTrademarks.map(t => `• ${t.name}`).join('\n');
+
+        const subject = `Bülten Takibi/${year} ${monthName} Ayı Benzer Markaya Rastlanılmadı`;
+
+        const content = `Merhabalar,
+ 
+Türk Patent ve Marka Kurumu nezdinde adınıza başvurusu yapılmış/ tescillenmiş olan markanızın,
+6769 Sayılı Sınai Mülkiyet Kanunu hükümlerine göre düzenli olarak yayınlanan Resmi Marka Bültenlerinde izlemesini yapıyoruz.
+ 
+${dateStr} tarih ve ${bulletinNoStr} sayılı Resmi Marka Bülteninde yaptığımız inceleme neticesinde aşağıda bilgileri bulunan markanıza benzer hiçbir marka başvurusu bulunamamıştır.
+              
+Markalar;
+${marksList}
+ 
+Saygılarımla
+${consultantName}`;
+
+        setMailSubject(subject);
+        setMailContent(content);
+        setMailQueue([]); // Clear queue as this is a "no match" mail
+        setIsMailModalOpen(true);
+    };
+
+    const handleSendMail = async () => {
+        console.log('Send mail clicked'); // Debug
+        if (!selectedFirmId) {
+            console.error('No firm selected');
+            toast.error('Lütfen bir firma seçiniz.');
+            return;
+        }
+
+        setIsSendingMail(true);
+
+        try {
+            console.log('Preparing attachments...');
+
+            // Helper to clean base64 string
+            const blobToBase64 = (blob: Blob): Promise<string> => {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        const base64String = reader.result as string;
+                        // Remove data URL prefix (e.g., "data:application/pdf;base64,")
+                        const base64Content = base64String.split(',')[1];
+                        resolve(base64Content);
+                    };
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+            };
+
+            const attachmentData = await Promise.all(mailQueue.map(async (item) => {
+                if (item.blob) {
+                    const content = await blobToBase64(item.blob);
+                    return {
+                        filename: item.filename,
+                        content: content
+                    };
+                }
+                return null;
+            }));
+
+            // Filter out nulls
+            const validAttachments = attachmentData.filter(Boolean) as { filename: string, content: string }[];
+
+            if (validAttachments.length === 0 && mailQueue.length > 0) {
+                console.error('Failed to process attachments');
+                throw new Error('Dosyalar işlenemedi.');
+            }
+
+            console.log('Sending to server action...', validAttachments.length, 'attachments');
+            const result = await sendTrademarkNotification(selectedFirmId, mailContent, mailSubject, validAttachments);
+            console.log('Server response:', result);
+
+            if (result && result.success) {
+                console.log('Sending success toast...');
+                toast.success('Benzer marka karşılaştırma raporlarınız firmaya iletilmiştir.', {
+                    duration: 5000,
+                });
+                setMailQueue([]);
+                setIsMailModalOpen(false);
+            } else {
+                throw new Error(result?.message || 'İşlem başarısız oldu.');
+            }
+        } catch (error: any) {
+            console.error('Mail send error:', error);
+            toast.error(error.message || 'Mail gönderilemedi.');
+        } finally {
+            setIsSendingMail(false);
+        }
+    };
+
+    const removeFromQueue = (id: number) => {
+        setMailQueue(prev => prev.filter(item => item.id !== id));
     };
 
     const handleFirmChange = (firmId: string) => {
@@ -262,89 +482,100 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
                                 <Loader2 className="animate-spin text-blue-600" />
                             </div>
                         ) : firmTrademarks.length > 0 ? (
-                            <div className="overflow-x-auto rounded-lg border border-gray-200">
-                                <table className="w-full text-sm text-left text-gray-500">
-                                    <thead className="text-xs text-gray-700 uppercase bg-gray-50">
-                                        <tr>
-                                            <th className="px-4 py-3 w-10"></th>
-                                            <th className="px-4 py-3">Logo</th>
-                                            <th className="px-4 py-3">Marka Adı</th>
-                                            <th className="px-4 py-3">Başvuru No</th>
-                                            <th className="px-4 py-3">Sınıflar</th>
-                                            <th className="px-4 py-3">Durum</th>
-                                            <th className="px-4 py-3 text-right">İşlem</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {firmTrademarks.map((t) => (
-                                            <Fragment key={t.id}>
-                                                <tr className="bg-white border-b hover:bg-gray-50">
-                                                    <td className="px-4 py-3">
-                                                        {t.search_keywords && (
-                                                            <button
-                                                                onClick={() => toggleExpand(t.id)}
-                                                                className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors font-bold text-lg leading-none pb-0.5"
-                                                            >
-                                                                {expandedRows[t.id] ? '-' : '+'}
-                                                            </button>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-4 py-3">
-                                                        <div className="h-8 w-8 relative bg-gray-100 rounded border overflow-hidden">
-                                                            {t.logo_url ? (
-                                                                // eslint-disable-next-line @next/next/no-img-element
-                                                                <img src={t.logo_url} alt={t.name} className="object-contain w-full h-full" />
-                                                            ) : <span className="text-[9px] flex items-center justify-center h-full text-gray-400">Yok</span>}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-3 font-medium text-gray-900">{t.name}</td>
-                                                    <td className="px-4 py-3">{t.application_no}</td>
-                                                    <td className="px-4 py-3">{t.classes || '-'}</td>
-                                                    <td className="px-4 py-3">
-                                                        {t.watch_agreement ? (
-                                                            <span className="text-green-600 flex items-center gap-1 text-xs font-medium">
-                                                                <LucideShieldCheck size={14} /> İzleniyor
-                                                            </span>
-                                                        ) : <span className="text-gray-400 text-xs text-nowrap">Sözleşme Yok</span>}
-                                                    </td>
-                                                    <td className="px-4 py-3 text-right">
-                                                        <button
-                                                            onClick={() => handleSearch(t.name, t.classes, t)}
-                                                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-[#001a4f] text-white text-xs font-medium rounded hover:bg-[#002366] transition-colors"
-                                                        >
-                                                            <LucideSearch size={12} />
-                                                            Ara
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                                {/* Keyword Sub-rows */}
-                                                {expandedRows[t.id] && t.search_keywords && (
-                                                    t.search_keywords.split(',').filter(Boolean).map((keyword: string, kIdx: number) => (
-                                                        <tr key={`${t.id}-kw-${kIdx}`} className="bg-gray-50 border-b">
-                                                            <td className="px-4 py-2 border-r border-gray-100"></td>
-                                                            <td className="px-4 py-2" colSpan={5}>
-                                                                <div className="flex items-center gap-2 pl-4 border-l-2 border-blue-200">
-                                                                    <span className="text-xs text-gray-500 font-medium">Arama Kelimesi:</span>
-                                                                    <span className="text-sm font-semibold text-gray-700">{keyword}</span>
-                                                                </div>
-                                                            </td>
-                                                            <td className="px-4 py-2 text-right">
+                            <>
+                                <div className="overflow-x-auto rounded-lg border border-gray-200">
+                                    <table className="w-full text-sm text-left text-gray-500">
+                                        <thead className="text-xs text-gray-700 uppercase bg-gray-50">
+                                            <tr>
+                                                <th className="px-4 py-3 w-10"></th>
+                                                <th className="px-4 py-3">Logo</th>
+                                                <th className="px-4 py-3">Marka Adı</th>
+                                                <th className="px-4 py-3">Başvuru No</th>
+                                                <th className="px-4 py-3">Sınıflar</th>
+                                                <th className="px-4 py-3">Durum</th>
+                                                <th className="px-4 py-3 text-right">İşlem</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {firmTrademarks.map((t) => (
+                                                <Fragment key={t.id}>
+                                                    <tr className="bg-white border-b hover:bg-gray-50">
+                                                        <td className="px-4 py-3">
+                                                            {t.search_keywords && (
                                                                 <button
-                                                                    onClick={() => handleSearch(keyword, t.classes, t)} // Search with KEYWORD but pass PARENT trademark context
-                                                                    className="inline-flex items-center gap-1 px-3 py-1 bg-white border border-gray-300 text-gray-700 text-xs font-medium rounded hover:bg-gray-50 transition-colors"
+                                                                    onClick={() => toggleExpand(t.id)}
+                                                                    className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors font-bold text-lg leading-none pb-0.5"
                                                                 >
-                                                                    <LucideSearch size={12} />
-                                                                    Ara
+                                                                    {expandedRows[t.id] ? '-' : '+'}
                                                                 </button>
-                                                            </td>
-                                                        </tr>
-                                                    ))
-                                                )}
-                                            </Fragment>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <div className="h-8 w-8 relative bg-gray-100 rounded border overflow-hidden">
+                                                                {t.logo_url ? (
+                                                                    // eslint-disable-next-line @next/next/no-img-element
+                                                                    <img src={t.logo_url} alt={t.name} className="object-contain w-full h-full" />
+                                                                ) : <span className="text-[9px] flex items-center justify-center h-full text-gray-400">Yok</span>}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-3 font-medium text-gray-900">{t.name}</td>
+                                                        <td className="px-4 py-3">{t.application_no}</td>
+                                                        <td className="px-4 py-3">{t.classes || '-'}</td>
+                                                        <td className="px-4 py-3">
+                                                            {t.watch_agreement ? (
+                                                                <span className="text-green-600 flex items-center gap-1 text-xs font-medium">
+                                                                    <LucideShieldCheck size={14} /> İzleniyor
+                                                                </span>
+                                                            ) : <span className="text-gray-400 text-xs text-nowrap">Sözleşme Yok</span>}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right">
+                                                            <button
+                                                                onClick={() => handleSearch(t.name, t.classes, t)}
+                                                                className="inline-flex items-center gap-1 px-3 py-1.5 bg-[#001a4f] text-white text-xs font-medium rounded hover:bg-[#002366] transition-colors"
+                                                            >
+                                                                <LucideSearch size={12} />
+                                                                Ara
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                    {/* Keyword Sub-rows */}
+                                                    {expandedRows[t.id] && t.search_keywords && (
+                                                        t.search_keywords.split(',').filter(Boolean).map((keyword: string, kIdx: number) => (
+                                                            <tr key={`${t.id}-kw-${kIdx}`} className="bg-gray-50 border-b">
+                                                                <td className="px-4 py-2 border-r border-gray-100"></td>
+                                                                <td className="px-4 py-2" colSpan={5}>
+                                                                    <div className="flex items-center gap-2 pl-4 border-l-2 border-blue-200">
+                                                                        <span className="text-xs text-gray-500 font-medium">Arama Kelimesi:</span>
+                                                                        <span className="text-sm font-semibold text-gray-700">{keyword}</span>
+                                                                    </div>
+                                                                </td>
+                                                                <td className="px-4 py-2 text-right">
+                                                                    <button
+                                                                        onClick={() => handleSearch(keyword, t.classes, t)} // Search with KEYWORD but pass PARENT trademark context
+                                                                        className="inline-flex items-center gap-1 px-3 py-1 bg-white border border-gray-300 text-gray-700 text-xs font-medium rounded hover:bg-gray-50 transition-colors"
+                                                                    >
+                                                                        <LucideSearch size={12} />
+                                                                        Ara
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        ))
+                                                    )}
+                                                </Fragment>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div className="mt-4 flex justify-end">
+                                    <button
+                                        onClick={handleNoMatchMail}
+                                        className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded hover:bg-red-700 border border-red-700 transition-colors flex items-center gap-2"
+                                    >
+                                        <LucideMail size={16} />
+                                        Benzer Marka Bulunamadı Maili At
+                                    </button>
+                                </div>
+                            </>
                         ) : (
                             <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
                                 Bu firmaya ait kayıtlı marka bulunamadı.
@@ -428,8 +659,127 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
                                 <LucideDownload size={16} />
                                 İndir
                             </a>
+                            <button
+                                onClick={handleAddToMailQueue}
+                                className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded hover:bg-green-700 flex items-center gap-2"
+                            >
+                                <LucideMail size={16} />
+                                Mail İçin Ekle
+                            </button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {/* Mail Preview Modal */}
+            {
+                isMailModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+                        <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl flex flex-col relative animate-in zoom-in-95">
+                            <div className="flex items-center justify-between p-4 border-b">
+                                <h3 className="font-semibold text-lg">Mail Gönderimi Önizleme</h3>
+                                <button onClick={() => setIsMailModalOpen(false)} className="p-1 hover:bg-gray-100 rounded">
+                                    <LucideX className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Kime</label>
+                                    <div className="p-2 bg-gray-50 rounded border text-sm">
+                                        {selectedFirm?.email || selectedFirm?.info_email || selectedFirm?.contact_email || 'Kayıtlı e-posta yok'}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Konu</label>
+                                    <input
+                                        value={mailSubject}
+                                        onChange={e => setMailSubject(e.target.value)}
+                                        className="w-full p-2 border rounded text-sm focus:outline-blue-600"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">İçerik</label>
+                                    <textarea
+                                        value={mailContent}
+                                        onChange={e => setMailContent(e.target.value)}
+                                        rows={12}
+                                        className="w-full p-2 border rounded text-sm focus:outline-blue-600 font-mono"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Ekler ({mailQueue.length})</label>
+                                    <div className="space-y-2">
+                                        {mailQueue.map((item) => (
+                                            <div key={item.id} className="flex items-center justify-between p-2 bg-gray-50 border rounded text-sm">
+                                                <div className="flex items-center gap-2">
+                                                    <LucideFileText size={16} className="text-red-500" />
+                                                    <span className="truncate max-w-[300px]">{item.filename}</span>
+                                                </div>
+                                                <button
+                                                    onClick={() => removeFromQueue(item.id)}
+                                                    className="text-red-500 hover:text-red-700 p-1"
+                                                >
+                                                    <LucideTrash2 size={16} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="p-4 border-t bg-gray-50 flex justify-end gap-3">
+
+
+                                <button
+                                    onClick={() => setIsMailModalOpen(false)}
+                                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50"
+                                >
+                                    İptal
+                                </button>
+                                <button
+                                    onClick={handleSendMail}
+                                    disabled={isSendingMail}
+                                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded hover:bg-blue-700 flex items-center gap-2 disabled:opacity-50"
+                                >
+                                    {isSendingMail ? (
+                                        <>
+                                            <Loader2 className="animate-spin w-4 h-4" />
+                                            <span>Gönderiliyor...</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <LucideSend size={16} />
+                                            <span>Gönder</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+            {/* Floating Mail Queue Button */}
+            {mailQueue.length > 0 && !isMailModalOpen && !previewUrl && (
+                <div className="fixed bottom-6 right-6 z-40 animate-in slide-in-from-bottom-5">
+                    <button
+                        onClick={openMailModal}
+                        className="flex items-center gap-3 px-6 py-4 bg-[#001a4f] text-white rounded-full shadow-xl hover:bg-[#002366] transition-all transform hover:scale-105"
+                    >
+                        <div className="relative">
+                            <LucideMail className="w-6 h-6" />
+                            <span className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center border-2 border-[#001a4f]">
+                                {mailQueue.length}
+                            </span>
+                        </div>
+                        <div className="flex flex-col items-start">
+                            <span className="font-bold text-sm">Mail Hazırla</span>
+                            <span className="text-[10px] opacity-80">{mailQueue.length} Rapor Eklendi</span>
+                        </div>
+                    </button>
                 </div>
             )}
         </div>

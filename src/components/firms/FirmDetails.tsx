@@ -6,6 +6,10 @@ import TrademarkForm from './TrademarkForm';
 import Link from 'next/link';
 import EditableField from '../ui/editable-field';
 import { SECTORS } from '@/constants/sectors';
+import { getFirmHistory, updateActionStatus } from '@/actions/history';
+import { useEffect } from 'react';
+import { toast } from 'sonner';
+import { LucideHistory, LucideCheckCircle, LucideXCircle, LucideClock, LucideEye, LucideTrash2 } from 'lucide-react';
 
 // Helper to format dates
 const formatDate = (dateString?: string) => {
@@ -16,6 +20,79 @@ const formatDate = (dateString?: string) => {
 export default function FirmDetails({ firm, trademarks }: { firm: any, trademarks: any[] }) {
     const [isTrademarkModalOpen, setIsTrademarkModalOpen] = useState(false);
     const [editingTrademark, setEditingTrademark] = useState<any>(null);
+    const handleDeleteAction = async (actionId: number) => {
+        if (!confirm('Bu işlemi silmek istediğinize emin misiniz?')) return;
+
+        try {
+            const { deleteFirmAction } = await import('@/actions/firms');
+            const result = await deleteFirmAction(actionId);
+
+            if (result.success) {
+                toast.success(result.message);
+                setHistory(prev => prev.filter(item => item.id !== actionId));
+            } else {
+                toast.error(result.message);
+            }
+        } catch (error) {
+            console.error(error);
+            toast.error('İşlem silinemedi.');
+        }
+    };
+    const [history, setHistory] = useState<any[]>([]);
+    const [loadingHistory, setLoadingHistory] = useState(false);
+    const [previewAction, setPreviewAction] = useState<any>(null);
+    const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+
+    useEffect(() => {
+        if (firm?.id) {
+            setLoadingHistory(true);
+            getFirmHistory(firm.id)
+                .then(setHistory)
+                .finally(() => setLoadingHistory(false));
+        }
+    }, [firm?.id]);
+
+    const handleStatusUpdate = async (actionId: string, newStatus: string) => {
+        try {
+            await updateActionStatus(actionId, newStatus);
+            setHistory(prev => prev.map(item => item.id === actionId ? { ...item, status: newStatus } : item));
+            toast.success('Durum güncellendi');
+        } catch (error) {
+            toast.error('Durum güncellenemedi');
+        }
+    };
+
+    const getStatusBadge = (status: string, id: string) => {
+        const styles: Record<string, string> = {
+            'pending': 'bg-gray-100 text-gray-800',
+            'sent': 'bg-blue-100 text-blue-800',
+            'viewed': 'bg-purple-100 text-purple-800',
+            'responded': 'bg-yellow-100 text-yellow-800',
+            'approved': 'bg-green-100 text-green-800',
+            'objected': 'bg-red-100 text-red-800'
+        };
+
+        const labels: Record<string, string> = {
+            'pending': 'Bekliyor',
+            'sent': 'Gönderildi',
+            'viewed': 'Görüntülendi',
+            'responded': 'Cevaplandı',
+            'approved': 'Onaylandı',
+            'objected': 'İtiraz Edildi'
+        };
+
+        return (
+            <select
+                value={status}
+                onChange={(e) => handleStatusUpdate(id, e.target.value)}
+                className={`text-xs font-semibold px-2 py-1 rounded-full border-0 focus:ring-1 focus:ring-blue-500 cursor-pointer ${styles[status] || styles['pending']}`}
+            >
+                {Object.entries(labels).map(([key, label]) => (
+                    <option key={key} value={key}>{label}</option>
+                ))}
+            </select>
+        );
+    };
 
     return (
         <div className="space-y-8">
@@ -236,16 +313,174 @@ export default function FirmDetails({ firm, trademarks }: { firm: any, trademark
                 </div>
             </div>
 
-            {isTrademarkModalOpen && (
-                <TrademarkForm
-                    firmId={firm.id}
-                    onClose={() => {
-                        setIsTrademarkModalOpen(false);
-                        setEditingTrademark(null);
-                    }}
-                    initialData={editingTrademark}
-                />
+
+            {/* Alt Kolon/Sekme: İşlem Geçmişi */}
+            <div className="lg:col-span-3 space-y-6 pt-6 border-t">
+                <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                        <LucideHistory className="text-gray-500" />
+                        İşlem Geçmişi
+                    </h2>
+                </div>
+
+                <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm text-gray-500">
+                            <thead className="bg-gray-50 text-xs uppercase text-gray-700">
+                                <tr>
+                                    <th className="px-6 py-3">Tarih</th>
+                                    <th className="px-6 py-3">İşlem Türü</th>
+                                    <th className="px-6 py-3">Detay / Konu</th>
+                                    <th className="px-6 py-3">Ekler</th>
+                                    <th className="px-6 py-3 text-right">Durum</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                                {loadingHistory ? (
+                                    <tr><td colSpan={5} className="px-6 py-8 text-center">Yükleniyor...</td></tr>
+                                ) : history.length > 0 ? (
+                                    history.map((action) => (
+                                        <tr key={action.id} className="hover:bg-gray-50">
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                {new Date(action.created_at).toLocaleString('tr-TR')}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                {action.type === 'notification_email' ? (
+                                                    <span className="flex items-center gap-1 text-blue-600 font-medium">
+                                                        <LucideMail size={14} /> Mail Bildirimi
+                                                    </span>
+                                                ) : action.type}
+                                            </td>
+                                            <td className="px-6 py-4 max-w-md truncate">
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <div>
+                                                        <span className={`font-bold block mb-1 ${action.metadata?.subject?.includes('Rastlanıldı !!!') ? 'text-green-600' :
+                                                                action.metadata?.subject?.includes('Rastlanılmadı') ? 'text-red-600' :
+                                                                    'text-gray-900'
+                                                            }`}>
+                                                            {action.metadata?.subject || '-'}
+                                                        </span>
+                                                        <span className="text-gray-400 text-xs">
+                                                            {action.metadata?.sent_to}
+                                                        </span>
+                                                    </div>
+                                                    {action.type === 'notification_email' && (
+                                                        <button
+                                                            onClick={() => {
+                                                                setPreviewAction(action);
+                                                                setIsPreviewModalOpen(true);
+                                                            }}
+                                                            className="text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition-colors whitespace-nowrap"
+                                                        >
+                                                            İçeriği Gör
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                {action.metadata?.attachment_count > 0 ? (
+                                                    <div className="flex flex-col gap-1">
+                                                        <span className="text-xs font-medium text-gray-700">{action.metadata.attachment_count} Ek</span>
+                                                        <span className="text-[10px] text-gray-400 truncate max-w-[200px]">
+                                                            {action.metadata.attachment_names?.join(', ')}
+                                                        </span>
+                                                    </div>
+                                                ) : '-'}
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <div className="flex items-center justify-end gap-3">
+                                                    {getStatusBadge(action.status, action.id)}
+                                                    <button
+                                                        onClick={() => handleDeleteAction(action.id)}
+                                                        className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                                                        title="İşlemi Sil"
+                                                    >
+                                                        <LucideTrash2 size={16} />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                ) : (
+                                    <tr>
+                                        <td colSpan={5} className="px-6 py-10 text-center text-gray-500">
+                                            Henüz bir işlem kaydı bulunmamaktadır.
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+
+            {
+                isTrademarkModalOpen && (
+                    <TrademarkForm
+                        firmId={firm.id}
+                        onClose={() => {
+                            setIsTrademarkModalOpen(false);
+                            setEditingTrademark(null);
+                        }}
+                        initialData={editingTrademark}
+                    />
+                )
+            }
+
+            {/* Preview Modal for Email History */}
+            {isPreviewModalOpen && previewAction && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                    <div className="w-full max-w-2xl rounded-xl bg-white shadow-2xl max-h-[80vh] flex flex-col">
+                        <div className="flex items-center justify-between border-b p-4 bg-gray-50 rounded-t-xl">
+                            <h3 className="font-semibold text-gray-900">Mail Önizleme</h3>
+                            <button
+                                onClick={() => setIsPreviewModalOpen(false)}
+                                className="text-gray-500 hover:text-gray-700"
+                            >
+                                <LucideXCircle size={20} />
+                            </button>
+                        </div>
+
+                        <div className="p-6 overflow-y-auto space-y-4">
+                            <div>
+                                <label className="text-xs font-semibold text-gray-500 uppercase">Konu</label>
+                                <div className="text-gray-900 font-medium">{previewAction.metadata?.subject}</div>
+                            </div>
+
+                            <div>
+                                <label className="text-xs font-semibold text-gray-500 uppercase">Alıcı</label>
+                                <div className="text-gray-900">{previewAction.metadata?.sent_to}</div>
+                            </div>
+
+                            <div>
+                                <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">İçerik</label>
+                                <div className="bg-gray-50 p-4 rounded-lg text-sm text-gray-800 whitespace-pre-wrap border border-gray-100 font-mono">
+                                    {previewAction.metadata?.full_content || previewAction.metadata?.content_preview || 'İçerik bulunamadı.'}
+                                </div>
+                            </div>
+
+                            {previewAction.metadata?.attachment_count > 0 && (
+                                <div>
+                                    <label className="text-xs font-semibold text-gray-500 uppercase">Ekler</label>
+                                    <div className="text-sm text-gray-600">
+                                        {previewAction.metadata.attachment_names?.join(', ')}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="p-4 border-t bg-gray-50 rounded-b-xl flex justify-end">
+                            <button
+                                onClick={() => setIsPreviewModalOpen(false)}
+                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50"
+                            >
+                                Kapat
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
-        </div>
+        </div >
     );
 }

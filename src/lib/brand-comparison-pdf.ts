@@ -15,9 +15,28 @@ interface WatchedTrademark {
     registration_date?: string;
 }
 
-export const generateBrandComparisonPDF = async (watchedMark: WatchedTrademark, similarMark: BulletinMark) => {
+// Define Firm Details Interface
+interface FirmDetails {
+    type: 'individual' | 'corporate';
+    name: string;
+    // Corporate fields
+    corporate_title?: string;
+    corporate_address?: string;
+    // Individual fields
+    individual_name_surname?: string;
+    individual_address?: string;
+    // Common
+    representative?: string;
+}
+
+export const generateBrandComparisonPDF = async (
+    watchedMark: WatchedTrademark,
+    similarMark: BulletinMark,
+    firmDetails?: FirmDetails // New optional parameter
+) => {
     const doc = new jsPDF() as jsPDFWithAutoTable;
     const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
 
     // --- Font & Logo Handling ---
     try {
@@ -67,7 +86,6 @@ export const generateBrandComparisonPDF = async (watchedMark: WatchedTrademark, 
         doc.rect(0, 0, pageWidth, 20, 'F');
 
         // Logo Image
-        // Approx 40x8 mm for logo
         doc.addImage(base64Logo, 'PNG', 15, 6, 40, 8);
 
     } catch (e) {
@@ -82,31 +100,153 @@ export const generateBrandComparisonPDF = async (watchedMark: WatchedTrademark, 
         doc.text('ÜSTÜN PATENT', 15, 13);
     }
 
-    // Date (Outside try/catch to ensure it prints even if font fails, but font might be helvetica)
+    // Date (Right aligned in header)
     const today = new Date().toLocaleDateString('tr-TR');
-    doc.setTextColor(255, 255, 255); // Ensure white for date
+    doc.setTextColor(255, 255, 255);
     doc.setFontSize(10);
     doc.text(today, pageWidth - 30, 13);
 
-    // --- Title ---
+    // --- FORMAL LETTER CONTENT ---
     doc.setTextColor(0, 0, 0); // Reset to black
-    doc.setFontSize(16);
-    doc.text('Marka İzleme Detayı', pageWidth / 2, 35, { align: 'center' });
+
+    let currentY = 35; // Start below header (Reduced from 40)
+
+    if (firmDetails) {
+        // Firm Name
+        const firmName = firmDetails.type === 'corporate'
+            ? (firmDetails.corporate_title || firmDetails.name)
+            : (firmDetails.individual_name_surname || firmDetails.name);
+
+        doc.setFont('Roboto', 'bold');
+        doc.setFontSize(10); // Reduced from 11
+        doc.text(firmName.toUpperCase(), 15, currentY);
+        currentY += 4; // Reduced from 5
+
+        // Firm Address
+        const address = firmDetails.type === 'corporate'
+            ? firmDetails.corporate_address
+            : firmDetails.individual_address;
+
+        if (address) {
+            doc.setFont('Roboto', 'normal');
+            doc.setFontSize(9); // Reduced from 11
+            const addressLines = doc.splitTextToSize(address.toUpperCase(), 100);
+            doc.text(addressLines, 15, currentY);
+            currentY += (addressLines.length * 4) + 6; // Reduced spacing
+        } else {
+            currentY += 6;
+        }
+
+        // Salutation
+        doc.setFont('Roboto', 'normal');
+        doc.setFontSize(9); // Standardize font size for letter body
+        doc.text('Sayın yetkili,', 15, currentY);
+        currentY += 6; // Reduced from 10
+
+        // Paragraph 1
+        const bulletinNo = similarMark.issue_no || '...';
+        const para1 = `Türk Patent ve Marka Kurumu tarafından yayınlanan ${bulletinNo}. Resmi Marka Bülteninde, adınıza kayıtlı markanıza benzer olanların yayınlandığını bildirmek isteriz.`;
+        const para1Lines = doc.splitTextToSize(para1, pageWidth - 30);
+        doc.text(para1Lines, 15, currentY);
+        currentY += (para1Lines.length * 4) + 3; // Reduced spacing
+
+        // Paragraph 2
+        const para2 = `Detayları verilen markaların tescil edilmesine karşı itiraz yapmak istemeniz durumunda talimat vermeniz gerekmektedir.`;
+        const para2Lines = doc.splitTextToSize(para2, pageWidth - 30);
+        doc.text(para2Lines, 15, currentY);
+        currentY += (para2Lines.length * 4) + 3;
+
+        // Paragraph 3 - Objection Date Calculation
+        const d = new Date();
+        d.setDate(d.getDate() + 30);
+        const objectionDate = d.toLocaleDateString('tr-TR');
+
+        const fullPara3 = `İtiraz isteminde bulunmak için son başvuru tarihinin ${objectionDate} olduğunu hatırlatır, bu süre içerisinde talep edilmesi halinde itirazın gerçekleştirilebileceğini belirtmek isteriz.`;
+        const para3Lines = doc.splitTextToSize(fullPara3, pageWidth - 30);
+        doc.text(para3Lines, 15, currentY);
+        currentY += (para3Lines.length * 4) + 6;
+
+        // Closing
+        doc.text('Saygılarımızla.', 15, currentY);
+        currentY += 10; // Reduced from 15
+
+        // Consultant Name
+        const consultantName = (watchedMark as any).consultant_name || firmDetails.representative || 'İlgili Danışman';
+
+        doc.setFont('Roboto', 'bold');
+        doc.text(consultantName, 15, currentY);
+        currentY += 4;
+        doc.setFont('Roboto', 'normal');
+        doc.text('Operasyon Destek Uzmanı', 15, currentY);
+
+        currentY += 8; // Reduced space before table
+    } else {
+        currentY = 40;
+    }
+
+    // --- Title (Marka İzleme Detayı) ---
+    doc.setFont('Roboto', 'bold');
+    doc.setFontSize(12); // Reduced from 14
+    doc.text('Marka İzleme Detayı', pageWidth / 2, currentY, { align: 'center' });
+    currentY += 6; // Reduced from 10
 
     // --- Comparison Table ---
-    const startY = 45;
+    // Start table at currentY
 
-    // Helper to load image
+    // Helper to load and optimize image
     const getImageData = async (url: string): Promise<string | null> => {
         if (!url) return null;
         try {
-            const response = await fetch(url);
-            const blob = await response.blob();
-            return new Promise((resolve) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result as string);
-                reader.onerror = () => resolve(null);
-                reader.readAsDataURL(blob);
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.crossOrigin = 'Anonymous';
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+
+                    // Resize logic
+                    const MAX_SIZE = 800; // Limit max dimension
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > height) {
+                        if (width > MAX_SIZE) {
+                            height *= MAX_SIZE / width;
+                            width = MAX_SIZE;
+                        }
+                    } else {
+                        if (height > MAX_SIZE) {
+                            width *= MAX_SIZE / height;
+                            height = MAX_SIZE;
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+
+                    if (ctx) {
+                        // Draw with white background to support JPEG optimization if needed, 
+                        // but sticking to PNG for logos to preserve transparency is safer unless requested otherwise.
+                        // However, strictly size optimization usually implies JPEG. 
+                        // Let's try to keep it PNG but resized first. 
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        // Use JPEG with high quality to reduce size significantly compared to PNG for complex logos,
+                        // BUT logos often have transparency. If we convert to JPEG, transparency becomes black.
+                        // Ideally we check for transparency or just stick to PNG resizing which already saves a lot.
+                        // Let's stick to PNG resizing for safety, or JPEG if no transparency. 
+                        // For generic "minimum size", JPEG 0.9 is best if we handle headers.
+                        // But let's assume resizing is the main win here.
+                        resolve(canvas.toDataURL('image/png'));
+                    } else {
+                        resolve(null);
+                    }
+                };
+                img.onerror = (e) => {
+                    console.error('Image load error', e);
+                    resolve(null);
+                }
+                img.src = url;
             });
         } catch (e) {
             console.error('Image load error', e);
@@ -114,8 +254,11 @@ export const generateBrandComparisonPDF = async (watchedMark: WatchedTrademark, 
         }
     };
 
-    const watchedLogo = await getImageData(watchedMark.logo_url || '');
-    const similarLogo = await getImageData(similarMark.logo_url || '');
+    // Use parallel loading
+    const [watchedLogo, similarLogo] = await Promise.all([
+        getImageData(watchedMark.logo_url || ''),
+        getImageData(similarMark.logo_url || '')
+    ]);
 
     // Format dates
     const safeDate = (dateStr: string) => {
@@ -123,20 +266,16 @@ export const generateBrandComparisonPDF = async (watchedMark: WatchedTrademark, 
         return new Date(dateStr).toLocaleDateString('tr-TR');
     };
 
-    let objectionDate = '-';
-    if (similarMark.application_date_220) {
-        const dParts = similarMark.application_date_220.match(/(\d{2})\.(\d{2})\.(\d{4})/);
-        if (dParts) {
-            const d = new Date(`${dParts[3]}-${dParts[2]}-${dParts[1]}`);
-            d.setDate(d.getDate() + 75);
-            objectionDate = d.toLocaleDateString('tr-TR');
-        }
-    }
+    // Recalculate objection date for the table row (keep consistency)
+    const dObj = new Date();
+    dObj.setDate(dObj.getDate() + 30);
+    const objectionDateTable = dObj.toLocaleDateString('tr-TR');
+
 
     // Column 1 Content
     const col1Title = `İzlenen Marka\n${watchedMark.name}`;
     const col1Data = [
-        { content: '', styles: { minCellHeight: 40, halign: 'center', valign: 'middle' } as any },
+        { content: '', styles: { minCellHeight: 35, halign: 'center', valign: 'middle' } as any }, // Reduced image height
         `İzlenen Sınıf: ${watchedMark.classes || '-'}`,
         `Başvuru Tarihi: -`,
         `Başvuru No: ${watchedMark.application_no || '-'}`,
@@ -149,17 +288,17 @@ export const generateBrandComparisonPDF = async (watchedMark: WatchedTrademark, 
     const similarClasses = similarMark.nice_classes_511 ? similarMark.nice_classes_511.match(/\d{2}/g)?.join(' ') : '-';
 
     const col2Data = [
-        { content: '', styles: { minCellHeight: 40, halign: 'center', valign: 'middle' } as any },
+        { content: '', styles: { minCellHeight: 35, halign: 'center', valign: 'middle' } as any }, // Reduced image height
         `Başvurulan Sınıflar: ${similarClasses}`,
         `Başvuru Tarihi: ${similarMark.application_date_220 || '-'}`,
         `Başvuru Numarası: ${similarMark.application_no_210 || '-'}`,
-        `Son İtiraz Tarihi: ${objectionDate}`,
+        `Son İtiraz Tarihi: ${objectionDateTable}`,
         `Hak Sahibi: ${similarMark.owner_agent_731 || '-'}`
     ];
 
     // @ts-ignore
     autoTable(doc, {
-        startY: startY,
+        startY: currentY,
         head: [[
             { content: col1Title, styles: { halign: 'center', valign: 'middle', fillColor: [240, 240, 240], textColor: 0, fontStyle: 'bold' } },
             { content: col2Title, styles: { halign: 'center', valign: 'middle', fillColor: [240, 240, 240], textColor: 0, fontStyle: 'bold' } }
@@ -175,8 +314,8 @@ export const generateBrandComparisonPDF = async (watchedMark: WatchedTrademark, 
         theme: 'grid',
         styles: {
             font: 'Roboto',
-            fontSize: 10,
-            cellPadding: 3,
+            fontSize: 9, // Reduced from 10
+            cellPadding: 2, // Reduced from 3
             lineColor: [200, 200, 200],
             lineWidth: 0.1,
             textColor: 0,
@@ -185,7 +324,7 @@ export const generateBrandComparisonPDF = async (watchedMark: WatchedTrademark, 
         headStyles: {
             font: 'Roboto',
             fontStyle: 'bold',
-            minCellHeight: 20
+            minCellHeight: 15 // Reduced from 20
         },
         columnStyles: {
             0: { cellWidth: pageWidth / 2 - 15 },
@@ -230,12 +369,6 @@ export const generateBrandComparisonPDF = async (watchedMark: WatchedTrademark, 
             }
         }
     });
-
-    // Bottom Text
-    const finalY = doc.lastAutoTable.finalY + 15;
-    doc.setFont('Roboto', 'normal');
-    doc.setFontSize(10);
-    doc.text('İlgili marka karşılaştırması yapılmış ve benzer marka bulunmuştur.', pageWidth / 2, finalY, { align: 'center' });
 
     // Output as Blob URL instead of save
     return doc.output('bloburl');

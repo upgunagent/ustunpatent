@@ -235,3 +235,37 @@ export async function getFirmTrademarks(firmId: string) {
 
     return data;
 }
+
+export async function getFirm(firmId: string) {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+        .from('firms')
+        .select('*')
+        .eq('id', firmId)
+        .single();
+
+    if (error) {
+        console.error('Error fetching firm:', error);
+        return null;
+    }
+
+    return data;
+}
+
+export async function deleteFirmAction(actionId: number) {
+    const supabase = await createClient();
+
+    const { error } = await supabase
+        .from('firm_actions')
+        .delete()
+        .eq('id', actionId);
+
+    if (error) {
+        console.error('Error deleting firm action:', error);
+        return { success: false, message: 'İşlem silinirken hata oluştu.' };
+    }
+
+    revalidatePath('/panel/firms/[id]', 'page');
+    return { success: true, message: 'İşlem başarıyla silindi.' };
+}
