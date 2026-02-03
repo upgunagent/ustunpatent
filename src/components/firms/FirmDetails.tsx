@@ -20,7 +20,7 @@ const formatDate = (dateString?: string) => {
 export default function FirmDetails({ firm, trademarks }: { firm: any, trademarks: any[] }) {
     const [isTrademarkModalOpen, setIsTrademarkModalOpen] = useState(false);
     const [editingTrademark, setEditingTrademark] = useState<any>(null);
-    const handleDeleteAction = async (actionId: number) => {
+    const handleDeleteAction = async (actionId: string) => {
         if (!confirm('Bu işlemi silmek istediğinize emin misiniz?')) return;
 
         try {

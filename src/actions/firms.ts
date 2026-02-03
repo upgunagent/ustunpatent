@@ -255,7 +255,7 @@ export async function getFirm(firmId: string) {
     return data;
 }
 
-export async function deleteFirmAction(actionId: number) {
+export async function deleteFirmAction(actionId: string) {
     const supabase = await createClient();
 
     const { error } = await supabase
