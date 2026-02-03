@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { LucideFileText, LucideSearch, LucideBriefcase, LucideEye, LucideLogOut, LucideLock } from "lucide-react";
+import { LucideFileText, LucideSearch, LucideBriefcase, LucideEye, LucideLogOut, LucideLock, LucideSettings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from 'react';
 import ChangePasswordModal from "./ChangePasswordModal";
@@ -77,6 +77,15 @@ export default function Sidebar() {
                 >
                     <LucideBriefcase size={24} />
                     Firmalar
+                </Link>
+
+                <Link
+                    href="/panel/settings"
+                    className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${isActive('/panel/settings') ? 'bg-white/10' : 'hover:bg-white/10'
+                        }`}
+                >
+                    <LucideSettings size={24} />
+                    Ayarlar
                 </Link>
 
                 <div className="mt-auto pt-4 border-t border-white/10 pb-8 space-y-1">

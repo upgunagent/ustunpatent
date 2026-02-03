@@ -64,20 +64,18 @@ export default function FirmDetails({ firm, trademarks }: { firm: any, trademark
 
     const getStatusBadge = (status: string, id: string) => {
         const styles: Record<string, string> = {
-            'pending': 'bg-gray-100 text-gray-800',
             'sent': 'bg-blue-100 text-blue-800',
-            'viewed': 'bg-purple-100 text-purple-800',
-            'responded': 'bg-yellow-100 text-yellow-800',
             'approved': 'bg-green-100 text-green-800',
-            'objected': 'bg-red-100 text-red-800'
+            'rejected': 'bg-red-100 text-red-800',
+            'contract_sent': 'bg-purple-100 text-purple-800',
+            'objected': 'bg-orange-100 text-orange-800'
         };
 
         const labels: Record<string, string> = {
-            'pending': 'Bekliyor',
             'sent': 'Gönderildi',
-            'viewed': 'Görüntülendi',
-            'responded': 'Cevaplandı',
             'approved': 'Onaylandı',
+            'rejected': 'Onaylanmadı',
+            'contract_sent': 'Sözleşme İletildi',
             'objected': 'İtiraz Edildi'
         };
 
@@ -355,8 +353,8 @@ export default function FirmDetails({ firm, trademarks }: { firm: any, trademark
                                                 <div className="flex items-start justify-between gap-2">
                                                     <div>
                                                         <span className={`font-bold block mb-1 ${action.metadata?.subject?.includes('Rastlanıldı !!!') ? 'text-green-600' :
-                                                                action.metadata?.subject?.includes('Rastlanılmadı') ? 'text-red-600' :
-                                                                    'text-gray-900'
+                                                            action.metadata?.subject?.includes('Rastlanılmadı') ? 'text-red-600' :
+                                                                'text-gray-900'
                                                             }`}>
                                                             {action.metadata?.subject || '-'}
                                                         </span>
@@ -455,9 +453,10 @@ export default function FirmDetails({ firm, trademarks }: { firm: any, trademark
 
                             <div>
                                 <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">İçerik</label>
-                                <div className="bg-gray-50 p-4 rounded-lg text-sm text-gray-800 whitespace-pre-wrap border border-gray-100 font-mono">
-                                    {previewAction.metadata?.full_content || previewAction.metadata?.content_preview || 'İçerik bulunamadı.'}
-                                </div>
+                                <div
+                                    className="bg-gray-50 p-4 rounded-lg text-sm text-gray-800 border border-gray-100 overflow-auto max-h-[400px]"
+                                    dangerouslySetInnerHTML={{ __html: previewAction.metadata?.full_content || previewAction.metadata?.content_preview || 'İçerik bulunamadı.' }}
+                                />
                             </div>
 
                             {previewAction.metadata?.attachment_count > 0 && (
