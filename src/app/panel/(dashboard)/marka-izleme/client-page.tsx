@@ -42,6 +42,7 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
     const [searchResults, setSearchResults] = useState<BulletinMark[]>([]);
     const [searchedClasses, setSearchedClasses] = useState<string[]>([]);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+    const [pdfFilename, setPdfFilename] = useState<string>('marka-karsilastirma.pdf');
 
     // New States for Keywords
     const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
@@ -93,6 +94,7 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
         }
         const url = await generateBrandComparisonPDF(watchedMark, similarMark, selectedFirm);
         setPreviewUrl(url.toString()); // Keep preview URL
+        setPdfFilename(`${watchedMark.name} - ${similarMark.mark_text_540}.pdf`);
         // Store temporary data for adding to mail queue if requested
         (window as any).currentPDFData = {
             watchedMark,
@@ -172,25 +174,11 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
         // For simplicity use firm rep or empty
         const consultantName = selectedFirm?.representative || '(Danışman Adı)';
 
-        const similarMarksList = mailQueue.map(item => `- ${item.similarMarkName} (${item.watchedMarkName} markasının benzer markası)`).join('\n');
+        const similarMarksList = mailQueue.map(item => `<li><b>${item.similarMarkName}</b> (${item.watchedMarkName} markasının benzer markası)</li>`).join('');
 
         const subject = `Bülten Takibi/${year} ${monthName} Ayı Benzer Markaya Rastlanıldı !!!`;
 
-        const content = `Merhabalar,
-
-Türk Patent ve Marka Kurumu nezdinde adınıza başvurusu yapılmış/ tescillenmiş olan markalarınızın,
-6769 Sayılı Sınai Mülkiyet Kanunu hükümlerine göre düzenli olarak yayınlanan Resmi Marka Bültenlerinde izlemesini yapıyoruz.
-
-${dateStr} tarih ve ${bulletinNoStr} sayılı Resmi Marka Bülteninde yaptığımız inceleme neticesinde hak sahibi olduğunuz ${markDetailsStr} sınıflarında (eş/benzer) marka başvurusu tespit edilmiştir. Detaylı bilgi ekte iletilmiştir.
-
-Markalarınız açısından risk teşkil ettiği kanaatindeyseniz tescili alınmadan gerekli itirazın yapılması önerimizdir.
-Süreli işlemler olduğundan konu ile alakalı geri bildirim yapmanızı rica ederiz.
-
-Markalar;
-${similarMarksList}
-
-Saygılarımla
-${consultantName}`;
+        const content = `<div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5; color: #333;"><p style="margin: 0 0 10px 0;">Merhabalar,</p><p style="margin: 0 0 10px 0;">Türk Patent ve Marka Kurumu nezdinde adınıza başvurusu yapılmış/ tescillenmiş olan markalarınızın, 6769 Sayılı Sınai Mülkiyet Kanunu hükümlerine göre düzenli olarak yayınlanan Resmi Marka Bültenlerinde izlemesini yapıyoruz.</p><p style="margin: 0 0 10px 0;"><b>${dateStr} tarih ve ${bulletinNoStr} sayılı</b> Resmi Marka Bülteninde yaptığımız <b style="color: #c00000;">inceleme neticesinde hak sahibi olduğunuz ${markDetailsStr} sınıflarında (eş/benzer) marka başvurusu tespit edilmiştir. Detaylı bilgi ekte iletilmiştir.</b></p><p style="margin: 0 0 10px 0;"><b style="color: #c00000;">Markalarınız açısından risk teşkil ettiği kanaatindeyseniz tescili alınmadan gerekli itirazın yapılması önerimizdir.<br>Süreli işlemler olduğundan konu ile alakalı geri bildirim yapmanızı rica ederiz.</b></p><p style="margin: 0 0 5px 0;"><b>Markalar;</b></p><ul style="margin: 0 0 15px 0; padding-left: 20px; list-style-type: disc;">${similarMarksList}</ul><p style="margin: 0 0 10px 0;">Saygılarımla,</p><br><img src="/images/mail-signature.png?v=${new Date().getTime()}" alt="Üstün Patent" style="max-width: 300px; height: auto;" /></div>`;
 
         setMailSubject(subject);
         setMailContent(content);
@@ -203,24 +191,23 @@ ${consultantName}`;
         const year = date.getFullYear();
         const dateStr = date.toLocaleDateString('tr-TR');
         const bulletinNoStr = '***BÜLTEN NUMARASINI YAZIN***';
-        const consultantName = selectedFirm?.representative || '(Danışman Adı)';
 
-        const marksList = firmTrademarks.map(t => `• ${t.name}`).join('\n');
+        const marksList = firmTrademarks.map(t => `<li style="margin-bottom: 5px;">${t.name}</li>`).join('');
 
         const subject = `Bülten Takibi/${year} ${monthName} Ayı Benzer Markaya Rastlanılmadı`;
 
-        const content = `Merhabalar,
- 
-Türk Patent ve Marka Kurumu nezdinde adınıza başvurusu yapılmış/ tescillenmiş olan markanızın,
-6769 Sayılı Sınai Mülkiyet Kanunu hükümlerine göre düzenli olarak yayınlanan Resmi Marka Bültenlerinde izlemesini yapıyoruz.
- 
-${dateStr} tarih ve ${bulletinNoStr} sayılı Resmi Marka Bülteninde yaptığımız inceleme neticesinde aşağıda bilgileri bulunan markanıza benzer hiçbir marka başvurusu bulunamamıştır.
-              
-Markalar;
-${marksList}
- 
-Saygılarımla
-${consultantName}`;
+        const content = `<div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5; color: #333;">
+            <p style="margin: 0 0 10px 0;">Merhabalar,</p>
+            <p style="margin: 0 0 10px 0;">Türk Patent ve Marka Kurumu nezdinde adınıza başvurusu yapılmış/ tescillenmiş olan markanızın, 6769 Sayılı Sınai Mülkiyet Kanunu hükümlerine göre düzenli olarak yayınlanan Resmi Marka Bültenlerinde izlemesini yapıyoruz.</p>
+            <p style="margin: 0 0 10px 0;"><b>${dateStr} tarih ve ${bulletinNoStr} sayılı</b> Resmi Marka Bülteninde yaptığımız inceleme neticesinde aşağıda bilgileri bulunan markanıza benzer hiçbir marka başvurusu bulunamamıştır.</p>
+            <p style="margin: 0 0 5px 0;"><b>Markalar;</b></p>
+            <ul style="margin: 0 0 15px 0; padding-left: 20px; list-style-type: disc;">
+                ${marksList}
+            </ul>
+            <p style="margin: 0 0 10px 0;">Saygılarımla,</p>
+            <br>
+            <img src="/images/mail-signature.png?v=${new Date().getTime()}" alt="Üstün Patent" style="max-width: 300px; height: auto;" />
+        </div>`;
 
         setMailSubject(subject);
         setMailContent(content);
@@ -653,7 +640,7 @@ ${consultantName}`;
                             </button>
                             <a
                                 href={previewUrl}
-                                download="marka-karsilastirma.pdf"
+                                download={pdfFilename}
                                 className="px-4 py-2 text-sm font-medium text-white bg-[#001a4f] rounded hover:bg-[#002366] flex items-center gap-2"
                             >
                                 <LucideDownload size={16} />
@@ -702,11 +689,11 @@ ${consultantName}`;
 
                                 <div>
                                     <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">İçerik</label>
-                                    <textarea
-                                        value={mailContent}
-                                        onChange={e => setMailContent(e.target.value)}
-                                        rows={12}
-                                        className="w-full p-2 border rounded text-sm focus:outline-blue-600 font-mono"
+                                    <div
+                                        contentEditable
+                                        dangerouslySetInnerHTML={{ __html: mailContent }}
+                                        onInput={(e) => setMailContent(e.currentTarget.innerHTML)}
+                                        className="w-full p-2 border rounded text-sm focus:outline-blue-600 font-sans min-h-[300px] max-h-[500px] overflow-y-auto"
                                     />
                                 </div>
 

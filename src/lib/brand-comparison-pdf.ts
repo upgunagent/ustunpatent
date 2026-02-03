@@ -35,11 +35,80 @@ export const generateBrandComparisonPDF = async (
     similarMark: BulletinMark,
     firmDetails?: FirmDetails // New optional parameter
 ) => {
-    const doc = new jsPDF() as jsPDFWithAutoTable;
+    const doc = new jsPDF({ compress: true }) as jsPDFWithAutoTable;
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
 
+    // Helper to load and optimize image
+    const getImageData = async (
+        url: string,
+        options: {
+            maxSize: number;
+            format: 'png' | 'jpeg';
+            quality?: number;
+            transparent?: boolean;
+        } = { maxSize: 600, format: 'png' }
+    ): Promise<string | null> => {
+        if (!url) return null;
+        try {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.crossOrigin = 'Anonymous';
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+
+                    // Resize logic
+                    const MAX_SIZE = options.maxSize;
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > height) {
+                        if (width > MAX_SIZE) {
+                            height *= MAX_SIZE / width;
+                            width = MAX_SIZE;
+                        }
+                    } else {
+                        if (height > MAX_SIZE) {
+                            width *= MAX_SIZE / height;
+                            height = MAX_SIZE;
+                        }
+                    }
+
+                    canvas.width = width;
+                    canvas.height = height;
+
+                    if (ctx) {
+                        // Handle background
+                        if (!options.transparent || options.format === 'jpeg') {
+                            ctx.fillStyle = '#FFFFFF';
+                            ctx.fillRect(0, 0, width, height);
+                        }
+
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        const quality = options.quality ?? 0.7; // Default 0.7
+                        const mimeType = options.format === 'jpeg' ? 'image/jpeg' : 'image/png';
+
+                        resolve(canvas.toDataURL(mimeType, quality));
+                    } else {
+                        resolve(null);
+                    }
+                };
+                img.onerror = (e) => {
+                    console.error('Image load error', e);
+                    resolve(null);
+                }
+                img.src = url;
+            });
+        } catch (e) {
+            console.error('Image load error', e);
+            return null;
+        }
+    };
+
     // --- Font & Logo Handling ---
+
     try {
         const fontUrlRegular = window.location.origin + '/fonts/Roboto-Regular.ttf';
         const fontUrlMedium = window.location.origin + '/fonts/Roboto-Medium.ttf';
@@ -194,71 +263,21 @@ export const generateBrandComparisonPDF = async (
     // --- Comparison Table ---
     // Start table at currentY
 
-    // Helper to load and optimize image
-    const getImageData = async (url: string): Promise<string | null> => {
-        if (!url) return null;
-        try {
-            return new Promise((resolve, reject) => {
-                const img = new Image();
-                img.crossOrigin = 'Anonymous';
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    const ctx = canvas.getContext('2d');
+    // Use parallel loading with aggressive optimization
+    // Logo: Resize to 400px (enough for header), keep PNG for transparency if needed (but header is blue, check later. Actually header code draws a blue rect and then the logo. 
+    // The logo is `ustun-logo-white.png`. It likely has transparency. 
+    // If we use JPEG, the background will be white, which looks bad on blue header. 
+    // So for header logo, we MUST use PNG with transparency, but RESIZED.
+    // NOTE: The previous code was using base64Logo global variable. 
+    // We need to change that part too if we want to optimize the header logo!
+    // But wait, the previous code loaded `base64Logo` at the top using `fetch`.
+    // We should optimize THAT too if possible. 
+    // However, `getImageData` is async and relies on `Image` object which needs DOM context (this code runs in browser so it's fine).
 
-                    // Resize logic
-                    const MAX_SIZE = 800; // Limit max dimension
-                    let width = img.width;
-                    let height = img.height;
-
-                    if (width > height) {
-                        if (width > MAX_SIZE) {
-                            height *= MAX_SIZE / width;
-                            width = MAX_SIZE;
-                        }
-                    } else {
-                        if (height > MAX_SIZE) {
-                            width *= MAX_SIZE / height;
-                            height = MAX_SIZE;
-                        }
-                    }
-
-                    canvas.width = width;
-                    canvas.height = height;
-
-                    if (ctx) {
-                        // Draw with white background to support JPEG optimization if needed, 
-                        // but sticking to PNG for logos to preserve transparency is safer unless requested otherwise.
-                        // However, strictly size optimization usually implies JPEG. 
-                        // Let's try to keep it PNG but resized first. 
-                        ctx.drawImage(img, 0, 0, width, height);
-
-                        // Use JPEG with high quality to reduce size significantly compared to PNG for complex logos,
-                        // BUT logos often have transparency. If we convert to JPEG, transparency becomes black.
-                        // Ideally we check for transparency or just stick to PNG resizing which already saves a lot.
-                        // Let's stick to PNG resizing for safety, or JPEG if no transparency. 
-                        // For generic "minimum size", JPEG 0.9 is best if we handle headers.
-                        // But let's assume resizing is the main win here.
-                        resolve(canvas.toDataURL('image/png'));
-                    } else {
-                        resolve(null);
-                    }
-                };
-                img.onerror = (e) => {
-                    console.error('Image load error', e);
-                    resolve(null);
-                }
-                img.src = url;
-            });
-        } catch (e) {
-            console.error('Image load error', e);
-            return null;
-        }
-    };
-
-    // Use parallel loading
+    // Let's optimize the TRADEMARK images first here.
     const [watchedLogo, similarLogo] = await Promise.all([
-        getImageData(watchedMark.logo_url || ''),
-        getImageData(similarMark.logo_url || '')
+        getImageData(watchedMark.logo_url || '', { maxSize: 350, format: 'jpeg', quality: 0.5 }),
+        getImageData(similarMark.logo_url || '', { maxSize: 350, format: 'jpeg', quality: 0.5 })
     ]);
 
     // Format dates

@@ -7,7 +7,7 @@ export async function sendEmail(
     to: string,
     subject: string,
     text: string,
-    attachments: { filename: string, content: string | Buffer }[] = [],
+    attachments: any[] = [], // Allow generic attachments (path, cid, content)
     html?: string
 ) {
     try {
@@ -55,7 +55,7 @@ export async function sendEmail(
 // Specific Action for Trademark Notifications
 export async function sendTrademarkNotification(
     firmId: string,
-    emailContent: string,
+    emailContent: string, // Treat this as HTML
     subject: string,
     attachmentData: { filename: string, content: string }[]
 ) {
@@ -87,13 +87,38 @@ export async function sendTrademarkNotification(
         }
 
         // 2. Process Attachments
-        const attachments = attachmentData.map(item => ({
+        const attachments: any[] = attachmentData.map(item => ({
             filename: item.filename.endsWith('.pdf') ? item.filename : `${item.filename}.pdf`,
             content: Buffer.from(item.content, 'base64')
         }));
 
+        // Add Signature Image (CID)
+        const fs = require('fs');
+        const path = require('path');
+        const signaturePath = path.join(process.cwd(), 'public', 'images', 'mail-signature.png');
+
+        if (fs.existsSync(signaturePath)) {
+            // @ts-ignore
+            attachments.push({
+                filename: 'mail-signature.png',
+                path: signaturePath, // Nodemailer supports path
+                cid: 'signature' // CID for inline usage
+            });
+        }
+
+
+
         // 3. Send Email using Helper
-        const result = await sendEmail(toEmail, subject, emailContent, attachments);
+        // Pass emailContent as HTML, and strip tags for plain text fallback
+        const plainText = emailContent.replace(/<[^>]*>?/gm, '');
+
+        // Replace the preview image URL with CID for the actual email
+        const finalHtmlContent = emailContent.replace(
+            /src="\/images\/mail-signature.png\?v=\d+"/g,
+            'src="cid:signature"'
+        );
+
+        const result = await sendEmail(toEmail, subject, plainText, attachments, finalHtmlContent);
 
         if (!result.success) {
             return { success: false, message: `Sunucu hatası: ${result.message}` };

@@ -21,7 +21,7 @@ export async function requestPasswordResetOTP(email: string) {
 
     if (linkError) {
         console.error("Generate Link Error:", linkError);
-        return { success: false, message: 'Link oluşturulamadı.' };
+        return { success: false, message: `Link oluşturulamadı: ${linkError.message}` };
     }
 
     const hiddenLink = linkData.properties.action_link;
