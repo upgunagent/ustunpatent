@@ -124,7 +124,8 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
                 similarMarkName: data.similarMark.mark_text_540,
                 watchedMarkName: data.watchedMark.name,
                 watchedMarkClasses: data.watchedMark.classes,
-                bulletinNo: data.similarMark.issue_no // Store bulletin No
+                bulletinNo: data.similarMark.issue_no, // Store bulletin No
+                similarMarkAppNo: data.similarMark.application_no_210 // Store App No
             }]);
 
             toast.success('Rapor mail kuyruğuna eklendi.');
@@ -174,7 +175,7 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
         // For simplicity use firm rep or empty
         const consultantName = selectedFirm?.representative || '(Danışman Adı)';
 
-        const similarMarksList = mailQueue.map(item => `<li><b>${item.similarMarkName}</b> (${item.watchedMarkName} markasının benzer markası)</li>`).join('');
+        const similarMarksList = mailQueue.map(item => `<li><b>${item.similarMarkName} - (${item.similarMarkAppNo})</b> (${item.watchedMarkName} markasının benzer markası)</li>`).join('');
 
         const subject = `Bülten Takibi/${year} ${monthName} Ayı Benzer Markaya Rastlanıldı !!!`;
 

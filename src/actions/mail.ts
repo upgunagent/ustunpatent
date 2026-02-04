@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { createClient as createAdminClient } from '@supabase/supabase-js';
 
 // Generic Email Sender Helper
 export async function sendEmail(
@@ -113,8 +114,9 @@ export async function sendTrademarkNotification(
         const plainText = emailContent.replace(/<[^>]*>?/gm, '');
 
         // Replace the preview image URL with CID for the actual email
+        // Match any src ending in mail-signature.png (with or without query params, absolute or relative)
         const finalHtmlContent = emailContent.replace(
-            /src="\/images\/mail-signature.png\?v=\d+"/g,
+            /src=["'][^"']*mail-signature\.png[^"']*["']/g,
             'src="cid:signature"'
         );
 
@@ -157,10 +159,146 @@ export async function sendTrademarkNotification(
     }
 }
 
+
 export async function sendTestMailAction() {
     return sendEmail(
         "ozgur@upgunai.com",
         "Uygulama İçi Test Maili",
         "Bu mail uygulamadan başarıyla gönderildi."
     );
+}
+
+// Contract Action
+export async function sendContractEmail(
+    firmId: string,
+    emailContent: string,
+    subject: string,
+    attachmentData: { filename: string, content: string }[]
+) {
+    try {
+        const supabase = await createClient();
+
+        // 1. Fetch Firm Email (Reuse logic or fetch new)
+        const { data: firm, error: firmError } = await supabase
+            .from('firms')
+            .select('email')
+            .eq('id', firmId)
+            .single();
+
+        if (firmError || !firm) {
+            return { success: false, message: 'Firma bilgileri bulunamadı.' };
+        }
+
+        const toEmail = firm.email;
+        if (!toEmail) {
+            return { success: false, message: 'Firma e-postası bulunamadı.' };
+        }
+
+        // 2. Process Attachments
+        const attachments: any[] = attachmentData.map(item => ({
+            filename: item.filename,
+            content: Buffer.from(item.content, 'base64')
+        }));
+
+        // Add Signature Image (CID)
+        const fs = require('fs');
+        const path = require('path');
+        const signaturePath = path.join(process.cwd(), 'public', 'images', 'mail-signature.png');
+        if (fs.existsSync(signaturePath)) {
+            // @ts-ignore
+            attachments.push({
+                filename: 'mail-signature.png',
+                path: signaturePath,
+                cid: 'signature' // CID for inline usage
+            });
+        }
+
+        // 3. Send Email
+        const plainText = emailContent.replace(/<[^>]*>?/gm, '');
+        // Match any src ending in mail-signature.png (with or without query params, absolute or relative)
+        const finalHtmlContent = emailContent.replace(
+            /src=["'][^"']*mail-signature\.png[^"']*["']/g,
+            'src="cid:signature"'
+        );
+
+        const result = await sendEmail(toEmail, subject, plainText, attachments, finalHtmlContent);
+
+        if (!result.success) {
+            return { success: false, message: `Mail gönderilemedi: ${result.message}` };
+        }
+
+        // 3.1 Upload PDF to Storage
+        let pdfUrl = null;
+        let uploadMessage = '';
+        try {
+            const pdfAttachment = attachmentData.find(a => a.filename.toLowerCase().endsWith('.pdf'));
+
+            if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+                uploadMessage = ' (Sistem Hatası: Service Role Key eksik)';
+                console.error("Missing SUPABASE_SERVICE_ROLE_KEY");
+            } else if (pdfAttachment) {
+                // Initialize Admin Client for Storage Upload (Bypasses RLS)
+                const adminSupabase = createAdminClient(
+                    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                    process.env.SUPABASE_SERVICE_ROLE_KEY!
+                );
+
+                const pdfBuffer = Buffer.from(pdfAttachment.content, 'base64');
+
+                // Sanitize filename to avoid "Invalid key" errors
+                const sanitizedFilename = pdfAttachment.filename.replace(/[^a-zA-Z0-9.-]/g, '_');
+                const fileName = `${firmId}/${Date.now()}_${sanitizedFilename}`;
+
+                const { data: uploadData, error: uploadError } = await adminSupabase.storage
+                    .from('contracts')
+                    .upload(fileName, pdfBuffer, {
+                        contentType: 'application/pdf',
+                        upsert: true
+                    });
+
+                if (!uploadError) {
+                    const { data: publicUrlData } = adminSupabase.storage
+                        .from('contracts')
+                        .getPublicUrl(fileName);
+                    pdfUrl = publicUrlData.publicUrl;
+                } else {
+                    console.error("PDF Upload Error:", uploadError);
+                    uploadMessage = ` (PDF Kaydedilemedi: ${uploadError.message})`;
+                }
+            } else {
+                uploadMessage = ' (PDF eki bulunamadı)';
+            }
+        } catch (uploadErr: any) {
+            console.error("PDF Upload Process Error:", uploadErr);
+            uploadMessage = ` (PDF işlem hatası: ${uploadErr.message})`;
+        }
+
+        // 4. Log Action
+        const { error: logError } = await supabase
+            .from('firm_actions')
+            .insert({
+                firm_id: firmId,
+                type: 'contract_sent',
+                status: 'contract_sent',
+                metadata: {
+                    subject: subject,
+                    content_preview: emailContent.substring(0, 200) + '...',
+                    full_content: emailContent,
+                    attachment_count: attachments.length,
+                    attachment_names: attachments.filter((a: any) => !a.cid).map((a: any) => a.filename),
+                    sent_to: toEmail,
+                    pdf_url: pdfUrl
+                }
+            });
+
+        const successMsg = pdfUrl
+            ? 'Sözleşme başarıyla gönderildi ve kaydedildi.'
+            : `Sözleşme gönderildi ancak sisteme kaydedilemedi${uploadMessage}.`;
+
+        return { success: true, message: successMsg };
+
+    } catch (e: any) {
+        console.error("Contract Send Error:", e);
+        return { success: false, message: e.message };
+    }
 }

@@ -3,11 +3,12 @@ import FirmDetails from "@/components/firms/FirmDetails";
 import Link from "next/link";
 import { LucideArrowLeft } from "lucide-react";
 import { notFound } from "next/navigation";
+import { getAgencySettings } from "@/actions/settings";
 
 export const dynamic = 'force-dynamic';
 
 export default async function FirmDetailsPage(props: { params: Promise<{ id: string }> }) {
-    const params = await props.params; // Await params in Next.js 15+
+    const params = await props.params;
 
     if (!params.id) {
         return notFound();
@@ -15,12 +16,13 @@ export default async function FirmDetailsPage(props: { params: Promise<{ id: str
 
     const supabase = await createClient();
 
-    // Fetch Firm Details
-    const { data: firm, error: firmError } = await supabase
-        .from("firms")
-        .select("*")
-        .eq("id", params.id)
-        .single();
+    // 1. Fetch Firm Data & Trademarks Parallel
+    const [firmParams, settings] = await Promise.all([
+        supabase.from("firms").select("*").eq("id", params.id).single(),
+        getAgencySettings()
+    ]);
+
+    const { data: firm, error: firmError } = firmParams;
 
     if (firmError || !firm) {
         console.error("Error fetching firm:", firmError);
@@ -48,7 +50,11 @@ export default async function FirmDetailsPage(props: { params: Promise<{ id: str
                 Firmalar Listesine Dön
             </Link>
 
-            <FirmDetails firm={firm} trademarks={trademarks || []} />
+            <FirmDetails
+                firm={firm}
+                trademarks={trademarks || []}
+                agencySettings={settings}
+            />
         </div>
     );
 }

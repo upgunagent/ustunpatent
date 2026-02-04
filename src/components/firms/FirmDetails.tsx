@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { LucideBuilding2, LucideUser, LucidePlus, LucideExternalLink, LucidePhone, LucideMail, LucideGlobe, LucideShieldCheck } from 'lucide-react';
-import TrademarkForm from './TrademarkForm';
 import Link from 'next/link';
+import ContractModal from './ContractModal';
+import TrademarkForm from './TrademarkForm';
+import { LucideBuilding2, LucideUser, LucidePlus, LucideExternalLink, LucidePhone, LucideMail, LucideGlobe, LucideShieldCheck, LucideFileText } from 'lucide-react';
 import EditableField from '../ui/editable-field';
 import { SECTORS } from '@/constants/sectors';
 import { getFirmHistory, updateActionStatus } from '@/actions/history';
@@ -17,8 +18,11 @@ const formatDate = (dateString?: string) => {
     return new Date(dateString).toLocaleDateString('tr-TR');
 };
 
-export default function FirmDetails({ firm, trademarks }: { firm: any, trademarks: any[] }) {
+
+export default function FirmDetails({ firm, trademarks, agencySettings }: { firm: any, trademarks: any[], agencySettings?: any }) {
     const [isTrademarkModalOpen, setIsTrademarkModalOpen] = useState(false);
+    const [isContractModalOpen, setIsContractModalOpen] = useState(false);
+    const [contractAction, setContractAction] = useState<any>(null);
     const [editingTrademark, setEditingTrademark] = useState<any>(null);
     const handleDeleteAction = async (actionId: string) => {
         if (!confirm('Bu işlemi silmek istediğinize emin misiniz?')) return;
@@ -162,19 +166,14 @@ export default function FirmDetails({ firm, trademarks }: { firm: any, trademark
                             {firm.type === 'corporate' ? (
                                 <>
                                     <div>
-                                        <EditableField firmId={firm.id} field="corporate_tax_office" value={firm.corporate_tax_office} label="Vergi Dairesi" />
-                                    </div>
-                                    <div>
-                                        <EditableField firmId={firm.id} field="corporate_tax_number" value={firm.corporate_tax_number} label="Vergi Numarası" />
-                                    </div>
-                                    <div>
-                                        <EditableField firmId={firm.id} field="corporate_authorized_person" value={firm.corporate_authorized_person} label="Yetkili Kişi" />
+                                        <EditableField firmId={firm.id} field="corporate_title" value={firm.corporate_title} multiline label="Firma Ünvanı" />
                                     </div>
                                     <div>
                                         <EditableField firmId={firm.id} field="corporate_address" value={firm.corporate_address} multiline label="Firma Adresi" />
                                     </div>
-                                    <div>
-                                        <EditableField firmId={firm.id} field="corporate_title" value={firm.corporate_title} multiline label="Firma Ünvanı" />
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <EditableField firmId={firm.id} field="corporate_tax_office" value={firm.corporate_tax_office} label="Vergi Dairesi" />
+                                        <EditableField firmId={firm.id} field="corporate_tax_number" value={firm.corporate_tax_number} label="Vergi Numarası" />
                                     </div>
                                 </>
                             ) : (
@@ -182,35 +181,34 @@ export default function FirmDetails({ firm, trademarks }: { firm: any, trademark
                                     <div>
                                         <EditableField firmId={firm.id} field="individual_name_surname" value={firm.individual_name_surname} label="Ad Soyad" />
                                     </div>
-                                    <div>
+                                    <div className="grid grid-cols-2 gap-4">
                                         <EditableField firmId={firm.id} field="individual_tc" value={firm.individual_tc} label="TC Kimlik No" />
-                                    </div>
-                                    <div>
                                         <EditableField firmId={firm.id} field="individual_address" value={firm.individual_address} multiline label="Adres" />
                                     </div>
                                 </>
                             )}
-                            <hr className="my-2" />
+
                             <div>
-                                <EditableField firmId={firm.id} field="authority_name" value={firm.authority_name} label="Yetki İsmi" />
+                                <EditableField firmId={firm.id} field="sector" value={firm.sector} options={SECTORS} label="Sektör" />
                             </div>
-                            <div>
+
+                            <hr className="my-2" />
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <EditableField firmId={firm.id} field="authority_name" value={firm.authority_name} label="Yetki İsmi" />
                                 <EditableField firmId={firm.id} field="tpmk_owner_no" value={firm.tpmk_owner_no} label="TPMK Sahip No" />
                             </div>
-                            <div>
+
+                            <div className="grid grid-cols-2 gap-4">
                                 <EditableField firmId={firm.id} field="phone" value={firm.phone} label="Telefon" />
-                            </div>
-                            <div>
                                 <EditableField firmId={firm.id} field="email" value={firm.email} label="E-posta" />
                             </div>
+
                             <div>
                                 <EditableField firmId={firm.id} field="website" value={firm.website} label="Web Sitesi" />
                             </div>
                             <div>
                                 <EditableField firmId={firm.id} field="representative" value={firm.representative} label="Müşteri Temsilcisi" />
-                            </div>
-                            <div>
-                                <EditableField firmId={firm.id} field="sector" value={firm.sector} options={SECTORS} label="Sektör" />
                             </div>
                         </div>
                     </div>
@@ -330,7 +328,8 @@ export default function FirmDetails({ firm, trademarks }: { firm: any, trademark
                                     <th className="px-6 py-3">İşlem Türü</th>
                                     <th className="px-6 py-3">Detay / Konu</th>
                                     <th className="px-6 py-3">Ekler</th>
-                                    <th className="px-6 py-3 text-right">Durum</th>
+                                    <th className="px-6 py-3">Durum</th>
+                                    <th className="px-6 py-3 text-right">İşlemler</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
@@ -345,7 +344,11 @@ export default function FirmDetails({ firm, trademarks }: { firm: any, trademark
                                             <td className="px-6 py-4">
                                                 {action.type === 'notification_email' ? (
                                                     <span className="flex items-center gap-1 text-blue-600 font-medium">
-                                                        <LucideMail size={14} /> Mail Bildirimi
+                                                        <LucideMail size={14} /> Benzerlik Bildirimi
+                                                    </span>
+                                                ) : action.type === 'contract_sent' ? (
+                                                    <span className="flex items-center gap-1 text-purple-600 font-medium">
+                                                        <LucideFileText size={14} /> Sözleşme
                                                     </span>
                                                 ) : action.type}
                                             </td>
@@ -362,7 +365,8 @@ export default function FirmDetails({ firm, trademarks }: { firm: any, trademark
                                                             {action.metadata?.sent_to}
                                                         </span>
                                                     </div>
-                                                    {action.type === 'notification_email' && (
+
+                                                    {(action.type === 'notification_email' || action.type === 'contract_sent') && (
                                                         <button
                                                             onClick={() => {
                                                                 setPreviewAction(action);
@@ -385,9 +389,35 @@ export default function FirmDetails({ firm, trademarks }: { firm: any, trademark
                                                     </div>
                                                 ) : '-'}
                                             </td>
-                                            <td className="px-6 py-4 text-right">
-                                                <div className="flex items-center justify-end gap-3">
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-3">
                                                     {getStatusBadge(action.status, action.id)}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <div className="flex items-center justify-end gap-2">
+                                                    {(action.type === 'contract_sent' && action.metadata?.pdf_url) ? (
+                                                        <a
+                                                            href={action.metadata.pdf_url}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 rounded border border-green-200 transition-colors"
+                                                        >
+                                                            <LucideEye size={14} />
+                                                            Sözleşmeyi Görüntüle
+                                                        </a>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => {
+                                                                setContractAction(action);
+                                                                setIsContractModalOpen(true);
+                                                            }}
+                                                            className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 rounded border border-purple-200 transition-colors"
+                                                        >
+                                                            <LucideFileText size={14} />
+                                                            Sözleşme Oluştur
+                                                        </button>
+                                                    )}
                                                     <button
                                                         onClick={() => handleDeleteAction(action.id)}
                                                         className="p-1 text-gray-400 hover:text-red-600 transition-colors"
@@ -426,60 +456,77 @@ export default function FirmDetails({ firm, trademarks }: { firm: any, trademark
                 )
             }
 
+            {
+                isContractModalOpen && contractAction && agencySettings && (
+                    <ContractModal
+                        firm={firm}
+                        trademarks={trademarks}
+                        action={contractAction}
+                        agencySettings={agencySettings}
+                        onClose={() => {
+                            setIsContractModalOpen(false);
+                            setContractAction(null);
+                        }}
+                    />
+                )
+            }
+
             {/* Preview Modal for Email History */}
-            {isPreviewModalOpen && previewAction && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-                    <div className="w-full max-w-2xl rounded-xl bg-white shadow-2xl max-h-[80vh] flex flex-col">
-                        <div className="flex items-center justify-between border-b p-4 bg-gray-50 rounded-t-xl">
-                            <h3 className="font-semibold text-gray-900">Mail Önizleme</h3>
-                            <button
-                                onClick={() => setIsPreviewModalOpen(false)}
-                                className="text-gray-500 hover:text-gray-700"
-                            >
-                                <LucideXCircle size={20} />
-                            </button>
-                        </div>
-
-                        <div className="p-6 overflow-y-auto space-y-4">
-                            <div>
-                                <label className="text-xs font-semibold text-gray-500 uppercase">Konu</label>
-                                <div className="text-gray-900 font-medium">{previewAction.metadata?.subject}</div>
+            {
+                isPreviewModalOpen && previewAction && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                        <div className="w-full max-w-2xl rounded-xl bg-white shadow-2xl max-h-[80vh] flex flex-col">
+                            <div className="flex items-center justify-between border-b p-4 bg-gray-50 rounded-t-xl">
+                                <h3 className="font-semibold text-gray-900">Mail Önizleme</h3>
+                                <button
+                                    onClick={() => setIsPreviewModalOpen(false)}
+                                    className="text-gray-500 hover:text-gray-700"
+                                >
+                                    <LucideXCircle size={20} />
+                                </button>
                             </div>
 
-                            <div>
-                                <label className="text-xs font-semibold text-gray-500 uppercase">Alıcı</label>
-                                <div className="text-gray-900">{previewAction.metadata?.sent_to}</div>
-                            </div>
-
-                            <div>
-                                <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">İçerik</label>
-                                <div
-                                    className="bg-gray-50 p-4 rounded-lg text-sm text-gray-800 border border-gray-100 overflow-auto max-h-[400px]"
-                                    dangerouslySetInnerHTML={{ __html: previewAction.metadata?.full_content || previewAction.metadata?.content_preview || 'İçerik bulunamadı.' }}
-                                />
-                            </div>
-
-                            {previewAction.metadata?.attachment_count > 0 && (
+                            <div className="p-6 overflow-y-auto space-y-4">
                                 <div>
-                                    <label className="text-xs font-semibold text-gray-500 uppercase">Ekler</label>
-                                    <div className="text-sm text-gray-600">
-                                        {previewAction.metadata.attachment_names?.join(', ')}
-                                    </div>
+                                    <label className="text-xs font-semibold text-gray-500 uppercase">Konu</label>
+                                    <div className="text-gray-900 font-medium">{previewAction.metadata?.subject}</div>
                                 </div>
-                            )}
-                        </div>
 
-                        <div className="p-4 border-t bg-gray-50 rounded-b-xl flex justify-end">
-                            <button
-                                onClick={() => setIsPreviewModalOpen(false)}
-                                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50"
-                            >
-                                Kapat
-                            </button>
+                                <div>
+                                    <label className="text-xs font-semibold text-gray-500 uppercase">Alıcı</label>
+                                    <div className="text-gray-900">{previewAction.metadata?.sent_to}</div>
+                                </div>
+
+                                <div>
+                                    <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">İçerik</label>
+                                    <div
+                                        className="bg-gray-50 p-4 rounded-lg text-sm text-gray-800 border border-gray-100 overflow-auto max-h-[400px]"
+                                        dangerouslySetInnerHTML={{ __html: previewAction.metadata?.full_content || previewAction.metadata?.content_preview || 'İçerik bulunamadı.' }}
+                                    />
+                                </div>
+
+                                {previewAction.metadata?.attachment_count > 0 && (
+                                    <div>
+                                        <label className="text-xs font-semibold text-gray-500 uppercase">Ekler</label>
+                                        <div className="text-sm text-gray-600">
+                                            {previewAction.metadata.attachment_names?.join(', ')}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="p-4 border-t bg-gray-50 rounded-b-xl flex justify-end">
+                                <button
+                                    onClick={() => setIsPreviewModalOpen(false)}
+                                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50"
+                                >
+                                    Kapat
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
         </div >
     );
 }
