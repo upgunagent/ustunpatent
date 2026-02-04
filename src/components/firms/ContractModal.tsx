@@ -184,7 +184,7 @@ export default function ContractModal({ onClose, firm, trademarks, action, agenc
                     <br>
                     <p>Teşekkürler.</p>
                     <p>Saygılarımla</p>
-                    <img src="${window.location.origin}/images/mail-signature.png" alt="Üstün Patent" style="display: block; margin-top: 10px;" />
+                    <img src="https://qmotrqehdzebojdowuol.supabase.co/storage/v1/object/public/firm-logos/assets/mail-signature.png" alt="Üstün Patent" style="display: block; margin-top: 10px;" />
                 </div>
                 `;
 
