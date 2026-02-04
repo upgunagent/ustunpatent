@@ -501,7 +501,10 @@ export default function FirmDetails({ firm, trademarks, agencySettings }: { firm
                                     <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">İçerik</label>
                                     <div
                                         className="bg-gray-50 p-4 rounded-lg text-sm text-gray-800 border border-gray-100 overflow-auto max-h-[400px]"
-                                        dangerouslySetInnerHTML={{ __html: previewAction.metadata?.full_content || previewAction.metadata?.content_preview || 'İçerik bulunamadı.' }}
+                                        dangerouslySetInnerHTML={{
+                                            __html: (previewAction.metadata?.full_content || previewAction.metadata?.content_preview || 'İçerik bulunamadı.')
+                                                .replace(/src="[^"]*\/images\/mail-signature\.png"/g, 'src="https://qmotrqehdzebojdowuol.supabase.co/storage/v1/object/public/firm-logos/assets/mail-signature.png"')
+                                        }}
                                     />
                                 </div>
 
