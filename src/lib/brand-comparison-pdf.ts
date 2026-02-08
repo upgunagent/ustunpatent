@@ -33,7 +33,8 @@ interface FirmDetails {
 export const generateBrandComparisonPDF = async (
     watchedMark: WatchedTrademark,
     similarMark: BulletinMark,
-    firmDetails?: FirmDetails // New optional parameter
+    firmDetails?: FirmDetails, // New optional parameter
+    consultantInfo?: { name: string; title: string } // New optional parameter
 ) => {
     const doc = new jsPDF({ compress: true }) as jsPDFWithAutoTable;
     const pageWidth = doc.internal.pageSize.getWidth();
@@ -210,7 +211,7 @@ export const generateBrandComparisonPDF = async (
         // Salutation
         doc.setFont('Roboto', 'normal');
         doc.setFontSize(9); // Standardize font size for letter body
-        doc.text('Sayın yetkili,', 15, currentY);
+        doc.text('Sayın Yetkili,', 15, currentY);
         currentY += 6; // Reduced from 10
 
         // Paragraph 1
@@ -238,16 +239,17 @@ export const generateBrandComparisonPDF = async (
 
         // Closing
         doc.text('Saygılarımızla.', 15, currentY);
-        currentY += 10; // Reduced from 15
+        currentY += 8; // Reduced from 15
 
-        // Consultant Name
-        const consultantName = (watchedMark as any).consultant_name || firmDetails.representative || 'İlgili Danışman';
+        // Consultant Name & Title
+        const consultantName = consultantInfo?.name || (watchedMark as any).consultant_name || firmDetails.representative || 'İlgili Danışman';
+        const consultantTitle = consultantInfo?.title || 'Marka Danışmanı';
 
         doc.setFont('Roboto', 'bold');
         doc.text(consultantName, 15, currentY);
         currentY += 4;
         doc.setFont('Roboto', 'normal');
-        doc.text('Operasyon Destek Uzmanı', 15, currentY);
+        doc.text(consultantTitle, 15, currentY);
 
         currentY += 8; // Reduced space before table
     } else {

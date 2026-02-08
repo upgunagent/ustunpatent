@@ -24,10 +24,10 @@ export default function TrademarkSearchPage() {
     const [error, setError] = useState<string | null>(null);
     const [debugInfo, setDebugInfo] = useState<{ logs: string[], screenshot: string | null } | null>(null);
 
-    // Detail Modal State
-    const [selectedMark, setSelectedMark] = useState<any | null>(null);
-    const [detailLoading, setDetailLoading] = useState(false);
-    const [modalDebug, setModalDebug] = useState<string[]>([]);
+    // Detail Modal State - Removed as per request
+    // const [selectedMark, setSelectedMark] = useState<any | null>(null);
+    // const [detailLoading, setDetailLoading] = useState(false);
+    // const [modalDebug, setModalDebug] = useState<string[]>([]);
 
     // Session ID for browser reuse
     const [sessionId, setSessionId] = useState<string | null>(null);
@@ -166,79 +166,7 @@ export default function TrademarkSearchPage() {
         }
     };
 
-    const loadDetail = async (item: any) => {
-        setDetailLoading(true);
-        setSelectedMark(item);
-        setModalDebug(['Init: Loading detail for ' + item.applicationNo]);
 
-        try {
-            setModalDebug(p => [...p, 'Fetching /api/patent-search...']);
-
-            // Debug: Check if markName is present
-            console.log("Detail Item:", item);
-            if (!item.markName) {
-                setModalDebug(p => [...p, 'WARNING: markName is missing!']);
-            }
-
-            // Client-side timeout (90 seconds) to prevent infinite spinner
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 90000);
-
-            try {
-                const res = await fetch('/api/patent-search', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'detail',
-                        sessionId: sessionId, // Pass saved sessionId
-                        params: {
-                            id: item.applicationNo,
-                            markName: item.markName || item.text
-                        }
-                    }),
-                    signal: controller.signal
-                });
-                clearTimeout(timeoutId);
-
-                setModalDebug(p => [...p, `Fetch Status: ${res.status}`]);
-                const data = await res.json();
-                setModalDebug(p => [...p, `Data Success: ${data.success}`]);
-
-                if (data.success) {
-                    if (data.data) {
-                        setModalDebug(p => [...p, 'Merging data...']);
-                        setSelectedMark((prev: any) => {
-                            const merged = { ...prev, ...data.data };
-                            if (data.data.debugTextScraped) merged.debugTextScraped = data.data.debugTextScraped;
-                            return merged;
-                        });
-                    }
-                    if (data.debug) setDebugInfo(data.debug);
-                } else {
-                    setModalDebug(p => [...p, `API Error: ${data.error}`]);
-                    if (data.debug) setDebugInfo(data.debug);
-                    if (data.timeout) {
-                        // Still show partial data if available from timeout
-                        if (data.data) setSelectedMark((prev: any) => ({ ...prev, ...data.data }));
-                    }
-                }
-            } catch (fetchError: any) {
-                if (fetchError.name === 'AbortError') {
-                    setModalDebug(p => [...p, 'Client Timeout (90s)']);
-                    alert("İşlem çok uzun sürdü (90sn). Sunucu yanıt vermiyor.");
-                } else {
-                    throw fetchError; // Re-throw other fetch errors to the outer catch
-                }
-            }
-
-        } catch (error) {
-            console.error('Detail fetch error:', error);
-            setModalDebug(p => [...p, `Catch Error: ${error}`]);
-        } finally {
-            setDetailLoading(false);
-            setModalDebug(p => [...p, 'Finished']);
-        }
-    };
 
     const handlePageChange = async (direction: 'next' | 'prev') => {
         if (!sessionId) return;
@@ -433,7 +361,6 @@ export default function TrademarkSearchPage() {
                                     <th className="px-4 py-3">Durumu</th>
                                     <th className="px-4 py-3">Nice Sınıfları</th>
                                     <th className="px-4 py-3">Şekil</th>
-                                    <th className="px-4 py-3 text-right">İşlem</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -490,14 +417,6 @@ export default function TrademarkSearchPage() {
                                                 <span className="text-gray-300">-</span>
                                             )}
                                         </td>
-                                        <td className="px-4 py-4 text-right">
-                                            <button
-                                                onClick={() => loadDetail(item)}
-                                                className="inline-flex items-center justify-center rounded bg-[#cc0000] px-4 py-2 text-xs font-bold text-white hover:bg-[#a30000] transition-colors shadow-sm"
-                                            >
-                                                DETAY
-                                            </button>
-                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -519,162 +438,7 @@ export default function TrademarkSearchPage() {
 
 
 
-            {/* Detail Modal / Overlay */}
-            {selectedMark && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
-                    <div className="w-full max-w-3xl rounded-xl bg-white shadow-2xl max-h-[90vh] flex flex-col">
-                        <div className="flex items-center justify-between p-6 border-b">
-                            <h3 className="text-xl font-semibold">Marka Detayı</h3>
-                            <button onClick={() => setSelectedMark(null)} className="text-muted-foreground hover:text-foreground">
-                                Kapat
-                            </button>
-                        </div>
-                        <div className="p-6 overflow-y-auto">
-                            {detailLoading ? (
-                                <div className="flex flex-col items-center justify-center py-12 space-y-4">
-                                    <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-                                    <p className="text-sm text-muted-foreground">TurkPatent'ten detaylar alınıyor...</p>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setDetailLoading(false);
-                                            setModalDebug(p => [...p, 'Cancelled by user']);
-                                        }}
-                                        className="inline-flex items-center justify-center rounded-md bg-red-100 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-200"
-                                    >
-                                        İşlemi İptal Et
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="space-y-6">
-                                    <div className="flex items-start gap-6">
-                                        <div className="h-32 w-32 shrink-0 rounded-lg border bg-white p-2">
-                                            {selectedMark.imagePath && (
-                                                <img src={selectedMark.imagePath} className="h-full w-full object-contain" alt="Logo" />
-                                            )}
-                                        </div>
-                                        <div>
-                                            <h4 className="text-2xl font-bold text-blue-900">{selectedMark.markName}</h4>
-                                            <p className="text-muted-foreground mt-1">{selectedMark.applicationNo}</p>
-                                        </div>
-                                    </div>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
-
-                                        <div className="p-3 bg-gray-50 rounded border">
-                                            <div className="font-bold text-gray-500 text-xs uppercase mb-1">Başvuru Numarası</div>
-                                            <div className="font-medium">{selectedMark.applicationNo}</div>
-                                        </div>
-                                        <div className="p-3 bg-gray-50 rounded border">
-                                            <div className="font-bold text-gray-500 text-xs uppercase mb-1">Başvuru Tarihi</div>
-                                            <div className="font-medium">{selectedMark.applicationDate}</div>
-                                        </div>
-                                        <div className="p-3 bg-gray-50 rounded border">
-                                            <div className="font-bold text-gray-500 text-xs uppercase mb-1">Tescil Numarası</div>
-                                            <div className="font-medium">{selectedMark.registrationNo || '-'}</div>
-                                        </div>
-                                        <div className="p-3 bg-gray-50 rounded border">
-                                            <div className="font-bold text-gray-500 text-xs uppercase mb-1">Tescil Tarihi</div>
-                                            <div className="font-medium">{selectedMark.registrationDate || '-'}</div>
-                                        </div>
-                                        <div className="p-3 bg-gray-50 rounded border">
-                                            <div className="font-bold text-gray-500 text-xs uppercase mb-1">Bülten No / Tarih</div>
-                                            <div className="font-medium">
-                                                {selectedMark.bulletinNo ? `${selectedMark.bulletinNo}` : '-'} / {selectedMark.bulletinDate || '-'}
-                                            </div>
-                                        </div>
-                                        <div className="p-3 bg-gray-50 rounded border">
-                                            <div className="font-bold text-gray-500 text-xs uppercase mb-1">Koruma Tarihi</div>
-                                            <div className="font-medium">{selectedMark.protectionDate || '-'}</div>
-                                        </div>
-                                        <div className="p-3 bg-gray-50 rounded border">
-                                            <div className="font-bold text-gray-500 text-xs uppercase mb-1">Marka Türü</div>
-                                            <div className="font-medium">{selectedMark.type || '-'}</div>
-                                        </div>
-                                        <div className="p-3 bg-gray-50 rounded border">
-                                            <div className="font-bold text-gray-500 text-xs uppercase mb-1">Nice Sınıfları</div>
-                                            <div className="font-medium">{selectedMark.niceClasses || '-'}</div>
-                                        </div>
-                                        <div className="p-3 bg-gray-50 rounded border">
-                                            <div className="font-bold text-gray-500 text-xs uppercase mb-1">Durumu</div>
-                                            <div className="font-medium text-blue-600">{selectedMark.status}</div>
-                                        </div>
-
-                                        {/* Full Width Items for People/Companies */}
-                                        <div className="md:col-span-2 lg:col-span-3 p-3 bg-gray-50 rounded border">
-                                            <div className="font-bold text-gray-500 text-xs uppercase mb-1">Başvuru Sahibi</div>
-                                            <div className="font-medium">{selectedMark.ownerName || selectedMark.holderName || '-'}</div>
-                                        </div>
-                                        <div className="md:col-span-2 lg:col-span-3 p-3 bg-gray-50 rounded border">
-                                            <div className="font-bold text-gray-500 text-xs uppercase mb-1">Vekil Bilgileri</div>
-                                            <div className="font-medium whitespace-pre-line">{selectedMark.attorneyName || '-'}</div>
-                                        </div>
-                                    </div>
-
-                                    {/* Decision Info */}
-                                    {(selectedMark.decision || selectedMark.decisionReason) && (
-                                        <div className="p-4 rounded-lg bg-blue-50 border border-blue-100">
-                                            <h5 className="font-bold text-blue-900 mb-2">Karar Bilgileri</h5>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <div>
-                                                    <span className="text-xs text-blue-700 uppercase font-bold">Karar</span>
-                                                    <p className="font-medium text-blue-950">{selectedMark.decision || '-'}</p>
-                                                </div>
-                                                <div>
-                                                    <span className="text-xs text-blue-700 uppercase font-bold">Gerekçe</span>
-                                                    <p className="font-medium text-blue-950">{selectedMark.decisionReason || '-'}</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Goods and Services */}
-                                    {selectedMark.goodsAndServices && selectedMark.goodsAndServices.length > 0 && (
-                                        <div className="rounded-lg border overflow-hidden">
-                                            <div className="bg-gray-100 px-4 py-2 border-b font-bold text-sm">Mal ve Hizmet Bilgileri</div>
-                                            <div className="divide-y">
-                                                {selectedMark.goodsAndServices.map((gs: any, i: number) => (
-                                                    <div key={i} className="p-3 text-sm flex gap-3">
-                                                        <span className="font-bold text-gray-700 shrink-0 w-8">{gs.code}</span>
-                                                        <span className="text-gray-600">{gs.description}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* History Table */}
-                                    {selectedMark.history && selectedMark.history.length > 0 && (
-                                        <div className="rounded-lg border overflow-hidden">
-                                            <div className="bg-gray-100 px-4 py-2 border-b font-bold text-sm">Başvuru İşlem Bilgileri</div>
-                                            <table className="w-full text-sm text-left">
-                                                <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-                                                    <tr>
-                                                        <th className="px-4 py-2">Tarih</th>
-                                                        <th className="px-4 py-2">İşlem</th>
-                                                        <th className="px-4 py-2">Açıklama</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y">
-                                                    {selectedMark.history.map((h: any, i: number) => (
-                                                        <tr key={i}>
-                                                            <td className="px-4 py-2 whitespace-nowrap">{h.date}</td>
-                                                            <td className="px-4 py-2 font-medium">{h.type}</td>
-                                                            <td className="px-4 py-2 text-gray-600">{h.description}</td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    )}
-
-
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
             {/* Image Zoom Modal */}
             {expandedImage && (
                 <div

@@ -96,7 +96,7 @@ export async function addTrademark(formData: FormData) {
         watch_end_date: formData.get('watch_end_date') || null,
         registration_date: formData.get('registration_date') || null,
         registration_no: formData.get('registration_no') || null,
-        consultant_name: formData.get('consultant_name'),
+        consultant_name: (await getFirm(firmId))?.representative,
         search_keywords: formData.get('search_keywords'), // Add search keywords
     };
 
@@ -158,7 +158,7 @@ export async function updateTrademark(formData: FormData) {
         watch_end_date: formData.get('watch_end_date') || null,
         registration_date: formData.get('registration_date') || null,
         registration_no: formData.get('registration_no') || null,
-        consultant_name: formData.get('consultant_name'),
+        consultant_name: (await getFirm(firmId))?.representative,
         search_keywords: formData.get('search_keywords'), // Add search keywords
     };
 

@@ -3,12 +3,15 @@ import Link from "next/link";
 import { LucidePlus, LucideBuilding2, LucideUser, LucideArrowRight } from "lucide-react";
 import SearchInput from "@/components/ui/search-input";
 import CopyableText from "@/components/ui/copyable-text";
+import { getAgencySettings } from "@/actions/settings";
+import ConsultantFilter from "@/components/firms/ConsultantFilter";
 
 export const dynamic = 'force-dynamic';
 
-export default async function FirmsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+export default async function FirmsPage({ searchParams }: { searchParams: Promise<{ q?: string; representative?: string }> }) {
     const supabase = await createClient();
-    const { q: query } = await searchParams;
+    const { q: query, representative } = await searchParams;
+    const settings = await getAgencySettings();
 
     let dbQuery = supabase
         .from("firms")
@@ -18,6 +21,10 @@ export default async function FirmsPage({ searchParams }: { searchParams: Promis
     if (query) {
         const q = query.trim();
         dbQuery = dbQuery.or(`corporate_title.ilike.%${q}%,individual_name_surname.ilike.%${q}%,tpmk_owner_no.ilike.%${q}%`);
+    }
+
+    if (representative) {
+        dbQuery = dbQuery.eq('representative', representative);
     }
 
     const { data: firms, error } = await dbQuery;
@@ -32,6 +39,7 @@ export default async function FirmsPage({ searchParams }: { searchParams: Promis
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <h1 className="text-2xl font-bold">Firmalar</h1>
                 <div className="flex items-center gap-4 flex-1 justify-end">
+                    <ConsultantFilter consultants={settings.consultants} />
                     <SearchInput placeholder="Firma Adı veya Sahip No ile ara..." />
                     <Link
                         href="/panel/firms/new"
@@ -48,6 +56,7 @@ export default async function FirmsPage({ searchParams }: { searchParams: Promis
                     <thead className="bg-gray-50 text-xs uppercase text-gray-700">
                         <tr>
                             <th className="px-6 py-3">Firma / Kişi Adı</th>
+                            <th className="px-6 py-3">Müşteri Temsilcisi</th>
                             <th className="px-6 py-3">TPMK Sahip No</th>
                             <th className="px-6 py-3">Tür</th>
                             <th className="px-6 py-3">Yetkili</th>
@@ -63,6 +72,9 @@ export default async function FirmsPage({ searchParams }: { searchParams: Promis
                                 <tr key={firm.id} className="hover:bg-gray-50 group">
                                     <td className="px-6 py-4 font-medium text-gray-900">
                                         <CopyableText text={firm.type === 'corporate' ? firm.corporate_title : firm.individual_name_surname || firm.name} />
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        {firm.representative || '-'}
                                     </td>
                                     <td className="px-6 py-4 font-mono text-gray-600">
                                         <CopyableText text={firm.tpmk_owner_no || '-'} />

@@ -21,7 +21,7 @@ function SubmitButton() {
     );
 }
 
-export default function FirmForm() {
+export default function FirmForm({ consultants }: { consultants: any[] }) {
     const [type, setType] = useState<'individual' | 'corporate'>('corporate');
 
     return (
@@ -40,7 +40,7 @@ export default function FirmForm() {
                         type="button"
                         onClick={() => setType('corporate')}
                         className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-all ${type === 'corporate'
-                            ? 'bg-white text-[#001a4f] shadow-sm'
+                            ? 'bg-[#001a4f] text-white shadow-sm'
                             : 'text-gray-500 hover:text-gray-700'
                             }`}
                     >
@@ -51,7 +51,7 @@ export default function FirmForm() {
                         type="button"
                         onClick={() => setType('individual')}
                         className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-all ${type === 'individual'
-                            ? 'bg-white text-[#001a4f] shadow-sm'
+                            ? 'bg-[#001a4f] text-white shadow-sm'
                             : 'text-gray-500 hover:text-gray-700'
                             }`}
                     >
@@ -70,7 +70,7 @@ export default function FirmForm() {
 
                     <div className="grid gap-4">
                         <div className="grid gap-2">
-                            <label className="text-sm font-medium text-gray-700">Yetki İsmi</label>
+                            <label className="text-sm font-medium text-gray-700">Yetkili İsmi</label>
                             <input
                                 name="authority_name"
                                 type="text"
@@ -81,12 +81,15 @@ export default function FirmForm() {
 
                         <div className="grid gap-2">
                             <label className="text-sm font-medium text-gray-700">Müşteri Temsilcisi</label>
-                            <input
+                            <select
                                 name="representative"
-                                type="text"
-                                placeholder="İlgili müşteri temsilcisi"
                                 className="flex h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#001a4f] focus:border-transparent"
-                            />
+                            >
+                                <option value="">İlgili müşteri temsilcisi seçiniz</option>
+                                {consultants?.map((c) => (
+                                    <option key={c.id} value={c.name}>{c.name}</option>
+                                ))}
+                            </select>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
@@ -190,14 +193,7 @@ export default function FirmForm() {
                                     />
                                 </div>
                             </div>
-                            <div className="grid gap-2">
-                                <label className="text-sm font-medium text-gray-700">Yetkili Kişi</label>
-                                <input
-                                    name="corporate_authorized_person"
-                                    type="text"
-                                    className="flex h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#001a4f] focus:border-transparent"
-                                />
-                            </div>
+
                             <div className="grid gap-2">
                                 <label className="text-sm font-medium text-gray-700">Firma Adresi</label>
                                 <textarea

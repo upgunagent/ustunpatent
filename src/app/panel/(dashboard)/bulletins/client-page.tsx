@@ -7,6 +7,7 @@ import BulletinTable, { BulletinMark } from '@/components/bulletins/BulletinTabl
 import PaginationControl from '@/components/bulletins/PaginationControl';
 import BulletinFilter, { FilterState } from '@/components/bulletins/BulletinFilter';
 import { calculateBrandSimilarity } from '@/lib/brand-similarity';
+import BulletinDetailModal from '@/components/bulletins/BulletinDetailModal';
 
 interface BulletinClientPageProps {
     initialData: BulletinMark[];
@@ -25,6 +26,8 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
     // Client-side pagination state (sadece arama modunda kullanılır)
     const [clientPage, setClientPage] = useState(1);
     const clientLimit = 50;
+
+    const [selectedMark, setSelectedMark] = useState<BulletinMark | null>(null);
 
     const [filters, setFilters] = useState<FilterState>({
         bulletinNo: '',
@@ -157,7 +160,10 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
                         </div>
                     </div>
                 ) : paginatedData.length > 0 ? (
-                    <BulletinTable data={paginatedData} />
+                    <BulletinTable
+                        data={paginatedData}
+                        onDetailClick={(mark) => setSelectedMark(mark)}
+                    />
                 ) : (
                     <div className="p-8 text-center text-gray-500">
                         Aradığınız kriterlere uygun kayıt bulunamadı.
@@ -172,6 +178,14 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
                     onPageChange={handlePageChange}
                 />
             </div>
+
+            {/* Detail Modal */}
+            {selectedMark && (
+                <BulletinDetailModal
+                    mark={selectedMark}
+                    onClose={() => setSelectedMark(null)}
+                />
+            )}
         </div>
     );
 }

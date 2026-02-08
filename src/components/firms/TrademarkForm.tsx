@@ -296,15 +296,7 @@ export default function TrademarkForm({ firmId, onClose, initialData }: Trademar
                             />
                         </div>
 
-                        <div className="grid gap-2 md:col-span-2">
-                            <label className="text-sm font-medium text-gray-700">Danışman Adı</label>
-                            <input
-                                name="consultant_name"
-                                type="text"
-                                defaultValue={initialData?.consultant_name}
-                                className="flex h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#001a4f] focus:border-transparent"
-                            />
-                        </div>
+
                     </div>
 
                     <div className="flex items-center justify-end gap-3 pt-4 border-t">

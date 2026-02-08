@@ -26,6 +26,7 @@ interface BulletinTableProps {
     data: BulletinMark[];
     highlightedClasses?: string[];
     onCompare?: (mark: BulletinMark) => void;
+    onDetailClick?: (mark: BulletinMark) => void;
 }
 
 // Helper for similarity badge color
@@ -35,7 +36,7 @@ const getSimilarityColor = (score: number) => {
     return "bg-red-600";
 };
 
-export default function BulletinTable({ data, highlightedClasses = [], onCompare }: BulletinTableProps) {
+export default function BulletinTable({ data, highlightedClasses = [], onCompare, onDetailClick }: BulletinTableProps) {
     const [selectedLogo, setSelectedLogo] = useState<string | null>(null);
     const [copyFeedback, setCopyFeedback] = useState<{ x: number, y: number, show: boolean }>({ x: 0, y: 0, show: false });
 
@@ -278,6 +279,21 @@ export default function BulletinTable({ data, highlightedClasses = [], onCompare
                                                 <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
                                                 <path d="M12 13V7" />
                                                 <path d="M9 10h6" />
+                                            </svg>
+                                        </button>
+                                    )}
+                                    {onDetailClick && (
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onDetailClick(mark);
+                                            }}
+                                            className="p-1.5 text-[#001a4f] hover:bg-gray-100 rounded transition-colors ml-1"
+                                            title="Detay"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-eye">
+                                                <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" />
+                                                <circle cx="12" cy="12" r="3" />
                                             </svg>
                                         </button>
                                     )}

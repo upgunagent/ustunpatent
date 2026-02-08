@@ -156,8 +156,20 @@ export async function addAgencyConsultant(data: { name: string; title: string; e
     revalidatePath('/panel/settings');
 }
 
+
 export async function removeAgencyConsultant(id: string) {
     const supabase = await createClient();
     await supabase.from('agency_consultants').delete().eq('id', id);
+    revalidatePath('/panel/settings');
+}
+
+export async function updateAgencyConsultant(id: string, data: { name: string; title: string; email: string; phone: string }) {
+    const supabase = await createClient();
+    const { error } = await supabase
+        .from('agency_consultants')
+        .update(data)
+        .eq('id', id);
+
+    if (error) throw new Error(error.message);
     revalidatePath('/panel/settings');
 }

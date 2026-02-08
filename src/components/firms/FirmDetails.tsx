@@ -46,6 +46,8 @@ export default function FirmDetails({ firm, trademarks, agencySettings }: { firm
     const [loadingHistory, setLoadingHistory] = useState(false);
     const [previewAction, setPreviewAction] = useState<any>(null);
     const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+    const [selectedYear, setSelectedYear] = useState<string | null>(null);
+    const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
 
     useEffect(() => {
         if (firm?.id) {
@@ -208,7 +210,13 @@ export default function FirmDetails({ firm, trademarks, agencySettings }: { firm
                                 <EditableField firmId={firm.id} field="website" value={firm.website} label="Web Sitesi" />
                             </div>
                             <div>
-                                <EditableField firmId={firm.id} field="representative" value={firm.representative} label="Müşteri Temsilcisi" />
+                                <EditableField
+                                    firmId={firm.id}
+                                    field="representative"
+                                    value={firm.representative}
+                                    label="Müşteri Temsilcisi"
+                                    options={agencySettings?.consultants?.map((c: any) => c.name)}
+                                />
                             </div>
                         </div>
                     </div>
@@ -317,6 +325,30 @@ export default function FirmDetails({ firm, trademarks, agencySettings }: { firm
                         <LucideHistory className="text-gray-500" />
                         İşlem Geçmişi
                     </h2>
+                    <div className="flex gap-2">
+                        <select
+                            className="text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            value={selectedMonth || ''}
+                            onChange={(e) => setSelectedMonth(e.target.value || null)}
+                        >
+                            <option value="">Ay Seçiniz</option>
+                            {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                                <option key={m} value={m}>
+                                    {new Date(0, m - 1).toLocaleString('tr-TR', { month: 'long' })}
+                                </option>
+                            ))}
+                        </select>
+                        <select
+                            className="text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            value={selectedYear || ''}
+                            onChange={(e) => setSelectedYear(e.target.value || null)}
+                        >
+                            <option value="">Yıl Seçiniz</option>
+                            {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(y => (
+                                <option key={y} value={y}>{y}</option>
+                            ))}
+                        </select>
+                    </div>
                 </div>
 
                 <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
@@ -336,99 +368,106 @@ export default function FirmDetails({ firm, trademarks, agencySettings }: { firm
                                 {loadingHistory ? (
                                     <tr><td colSpan={5} className="px-6 py-8 text-center">Yükleniyor...</td></tr>
                                 ) : history.length > 0 ? (
-                                    history.map((action) => (
-                                        <tr key={action.id} className="hover:bg-gray-50">
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                {new Date(action.created_at).toLocaleString('tr-TR')}
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                {action.type === 'notification_email' ? (
-                                                    <span className="flex items-center gap-1 text-blue-600 font-medium">
-                                                        <LucideMail size={14} /> Benzerlik Bildirimi
-                                                    </span>
-                                                ) : action.type === 'contract_sent' ? (
-                                                    <span className="flex items-center gap-1 text-purple-600 font-medium">
-                                                        <LucideFileText size={14} /> Sözleşme
-                                                    </span>
-                                                ) : action.type}
-                                            </td>
-                                            <td className="px-6 py-4 max-w-md truncate">
-                                                <div className="flex items-start justify-between gap-2">
-                                                    <div>
-                                                        <span className={`font-bold block mb-1 ${action.metadata?.subject?.includes('Rastlanıldı !!!') ? 'text-green-600' :
-                                                            action.metadata?.subject?.includes('Rastlanılmadı') ? 'text-red-600' :
-                                                                'text-gray-900'
-                                                            }`}>
-                                                            {action.metadata?.subject || '-'}
+                                    history
+                                        .filter(action => {
+                                            const actionDate = new Date(action.created_at);
+                                            const yearMatch = selectedYear ? actionDate.getFullYear().toString() === selectedYear : true;
+                                            const monthMatch = selectedMonth ? (actionDate.getMonth() + 1).toString() === selectedMonth : true;
+                                            return yearMatch && monthMatch;
+                                        })
+                                        .map((action) => (
+                                            <tr key={action.id} className="hover:bg-gray-50">
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    {new Date(action.created_at).toLocaleString('tr-TR')}
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    {action.type === 'notification_email' ? (
+                                                        <span className="flex items-center gap-1 text-blue-600 font-medium">
+                                                            <LucideMail size={14} /> Benzerlik Bildirimi
                                                         </span>
-                                                        <span className="text-gray-400 text-xs">
-                                                            {action.metadata?.sent_to}
+                                                    ) : action.type === 'contract_sent' ? (
+                                                        <span className="flex items-center gap-1 text-purple-600 font-medium">
+                                                            <LucideFileText size={14} /> Sözleşme
                                                         </span>
-                                                    </div>
+                                                    ) : action.type}
+                                                </td>
+                                                <td className="px-6 py-4 max-w-md truncate">
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <div>
+                                                            <span className={`font-bold block mb-1 ${action.metadata?.subject?.includes('Rastlanıldı !!!') ? 'text-green-600' :
+                                                                action.metadata?.subject?.includes('Rastlanılmadı') ? 'text-red-600' :
+                                                                    'text-gray-900'
+                                                                }`}>
+                                                                {action.metadata?.subject || '-'}
+                                                            </span>
+                                                            <span className="text-gray-400 text-xs">
+                                                                {action.metadata?.sent_to}
+                                                            </span>
+                                                        </div>
 
-                                                    {(action.type === 'notification_email' || action.type === 'contract_sent') && (
-                                                        <button
-                                                            onClick={() => {
-                                                                setPreviewAction(action);
-                                                                setIsPreviewModalOpen(true);
-                                                            }}
-                                                            className="text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition-colors whitespace-nowrap"
-                                                        >
-                                                            İçeriği Gör
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                {action.metadata?.attachment_count > 0 ? (
-                                                    <div className="flex flex-col gap-1">
-                                                        <span className="text-xs font-medium text-gray-700">{action.metadata.attachment_count} Ek</span>
-                                                        <span className="text-[10px] text-gray-400 truncate max-w-[200px]">
-                                                            {action.metadata.attachment_names?.join(', ')}
-                                                        </span>
+                                                        {(action.type === 'notification_email' || action.type === 'contract_sent') && (
+                                                            <button
+                                                                onClick={() => {
+                                                                    setPreviewAction(action);
+                                                                    setIsPreviewModalOpen(true);
+                                                                }}
+                                                                className="text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition-colors whitespace-nowrap"
+                                                            >
+                                                                İçeriği Gör
+                                                            </button>
+                                                        )}
                                                     </div>
-                                                ) : '-'}
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center gap-3">
-                                                    {getStatusBadge(action.status, action.id)}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4 text-right">
-                                                <div className="flex items-center justify-end gap-2">
-                                                    {(action.type === 'contract_sent' && action.metadata?.pdf_url) ? (
-                                                        <a
-                                                            href={action.metadata.pdf_url}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 rounded border border-green-200 transition-colors"
-                                                        >
-                                                            <LucideEye size={14} />
-                                                            Sözleşmeyi Görüntüle
-                                                        </a>
-                                                    ) : (
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    {action.metadata?.attachment_count > 0 ? (
+                                                        <div className="flex flex-col gap-1">
+                                                            <span className="text-xs font-medium text-gray-700">{action.metadata.attachment_count} Ek</span>
+                                                            <span className="text-[10px] text-gray-400 truncate max-w-[200px]">
+                                                                {action.metadata.attachment_names?.join(', ')}
+                                                            </span>
+                                                        </div>
+                                                    ) : '-'}
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center gap-3">
+                                                        {getStatusBadge(action.status, action.id)}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        {(action.type === 'contract_sent' && action.metadata?.pdf_url) ? (
+                                                            <a
+                                                                href={action.metadata.pdf_url}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 rounded border border-green-200 transition-colors"
+                                                            >
+                                                                <LucideEye size={14} />
+                                                                Sözleşmeyi Görüntüle
+                                                            </a>
+                                                        ) : (
+                                                            <button
+                                                                onClick={() => {
+                                                                    setContractAction(action);
+                                                                    setIsContractModalOpen(true);
+                                                                }}
+                                                                className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 rounded border border-purple-200 transition-colors"
+                                                            >
+                                                                <LucideFileText size={14} />
+                                                                Sözleşme Oluştur
+                                                            </button>
+                                                        )}
                                                         <button
-                                                            onClick={() => {
-                                                                setContractAction(action);
-                                                                setIsContractModalOpen(true);
-                                                            }}
-                                                            className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 rounded border border-purple-200 transition-colors"
+                                                            onClick={() => handleDeleteAction(action.id)}
+                                                            className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                                                            title="İşlemi Sil"
                                                         >
-                                                            <LucideFileText size={14} />
-                                                            Sözleşme Oluştur
+                                                            <LucideTrash2 size={16} />
                                                         </button>
-                                                    )}
-                                                    <button
-                                                        onClick={() => handleDeleteAction(action.id)}
-                                                        className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-                                                        title="İşlemi Sil"
-                                                    >
-                                                        <LucideTrash2 size={16} />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))
                                 ) : (
                                     <tr>
                                         <td colSpan={5} className="px-6 py-10 text-center text-gray-500">

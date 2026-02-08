@@ -184,7 +184,7 @@ export default function ContractModal({ onClose, firm, trademarks, action, agenc
                     <br>
                     <p>Teşekkürler.</p>
                     <p>Saygılarımla</p>
-                    <img src="https://qmotrqehdzebojdowuol.supabase.co/storage/v1/object/public/firm-logos/assets/mail-signature.png" alt="Üstün Patent" style="display: block; margin-top: 10px;" />
+                    <img src="https://qmotrqehdzebojdowuol.supabase.co/storage/v1/object/public/firm-logos/assets/mail-signature.png" alt="Üstün Patent" style="display: block; margin-top: 10px; width: 400px; height: auto;" />
                 </div>
                 `;
 
@@ -241,7 +241,8 @@ export default function ContractModal({ onClose, firm, trademarks, action, agenc
                                     Teşekkürler.<br />
                                     Saygılarımla
                                 </div>
-                                <img src="/images/mail-signature.png" alt="İmza" className="h-auto block mt-2" />
+                                <img src="https://qmotrqehdzebojdowuol.supabase.co/storage/v1/object/public/firm-logos/assets/mail-signature.png" alt="Üstün Patent" style={{ display: 'block', marginTop: '10px', width: '400px', height: 'auto' }} />
+
                             </div>
                         </div>
                         <div>

@@ -18,6 +18,8 @@ import { FirmCombobox } from '@/components/firms/FirmCombobox';
 import { getFirmTrademarks, getFirm } from '@/actions/firms';
 import { searchBulletinMarks } from '@/actions/bulletins';
 
+import { getAgencySettings } from '@/actions/settings';
+
 interface BulletinClientPageProps {
     initialData: BulletinMark[];
     totalCount: number;
@@ -36,6 +38,7 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
     const [selectedBulletin, setSelectedBulletin] = useState<string>('');
     const [selectedFirmId, setSelectedFirmId] = useState<string>('');
     const [selectedFirm, setSelectedFirm] = useState<any>(null);
+    const [agencySettings, setAgencySettings] = useState<any>(null); // New state for settings
     const [firmTrademarks, setFirmTrademarks] = useState<any[]>([]);
     const [loadingTrademarks, setLoadingTrademarks] = useState(false);
     const [searchedMarkName, setSearchedMarkName] = useState('');
@@ -65,6 +68,8 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
         if (searchParams.toString()) {
             router.replace('/panel/marka-izleme');
         }
+        // Fetch agency settings
+        getAgencySettings().then(setAgencySettings);
     }, []);
 
     // Fetch trademarks when firm is selected
@@ -92,14 +97,25 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
             console.error("Watched mark not found");
             return;
         }
-        const url = await generateBrandComparisonPDF(watchedMark, similarMark, selectedFirm);
+
+        // Find consultant info
+        let consultantInfo = { name: selectedFirm?.representative || 'İlgili Danışman', title: 'Marka Danışmanı' };
+        if (agencySettings?.consultants && selectedFirm?.representative) {
+            const consultant = agencySettings.consultants.find((c: any) => c.name === selectedFirm.representative);
+            if (consultant) {
+                consultantInfo = { name: consultant.name, title: consultant.title || 'Marka Danışmanı' };
+            }
+        }
+
+        const url = await generateBrandComparisonPDF(watchedMark, similarMark, selectedFirm, consultantInfo);
         setPreviewUrl(url.toString()); // Keep preview URL
         setPdfFilename(`${watchedMark.name} - ${similarMark.mark_text_540}.pdf`);
         // Store temporary data for adding to mail queue if requested
         (window as any).currentPDFData = {
             watchedMark,
             similarMark,
-            firm: selectedFirm
+            firm: selectedFirm,
+            consultantInfo
         };
     };
 
@@ -111,7 +127,7 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
             // Regenerate Blob (since previewUrl is just a string, we want a fresh Blob to store)
             // Or retrieve blob from url if possible? 
             // Better to regenerate to be safe and consistent.
-            const blobUrl = await generateBrandComparisonPDF(data.watchedMark, data.similarMark, data.firm);
+            const blobUrl = await generateBrandComparisonPDF(data.watchedMark, data.similarMark, data.firm, data.consultantInfo);
             const response = await fetch(blobUrl);
             const blob = await response.blob();
 
@@ -179,7 +195,7 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
 
         const subject = `Bülten Takibi/${year} ${monthName} Ayı Benzer Markaya Rastlanıldı !!!`;
 
-        const content = `<div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5; color: #333;"><p style="margin: 0 0 10px 0;">Merhabalar,</p><p style="margin: 0 0 10px 0;">Türk Patent ve Marka Kurumu nezdinde adınıza başvurusu yapılmış/ tescillenmiş olan markalarınızın, 6769 Sayılı Sınai Mülkiyet Kanunu hükümlerine göre düzenli olarak yayınlanan Resmi Marka Bültenlerinde izlemesini yapıyoruz.</p><p style="margin: 0 0 10px 0;"><b>${dateStr} tarih ve ${bulletinNoStr} sayılı</b> Resmi Marka Bülteninde yaptığımız <b style="color: #c00000;">inceleme neticesinde hak sahibi olduğunuz ${markDetailsStr} sınıflarında (eş/benzer) marka başvurusu tespit edilmiştir. Detaylı bilgi ekte iletilmiştir.</b></p><p style="margin: 0 0 10px 0;"><b style="color: #c00000;">Markalarınız açısından risk teşkil ettiği kanaatindeyseniz tescili alınmadan gerekli itirazın yapılması önerimizdir.<br>Süreli işlemler olduğundan konu ile alakalı geri bildirim yapmanızı rica ederiz.</b></p><p style="margin: 0 0 5px 0;"><b>Markalar;</b></p><ul style="margin: 0 0 15px 0; padding-left: 20px; list-style-type: disc;">${similarMarksList}</ul><p style="margin: 0 0 10px 0;">Saygılarımla,</p><br><img src="/images/mail-signature.png?v=${new Date().getTime()}" alt="Üstün Patent" style="max-width: 300px; height: auto;" /></div>`;
+        const content = `<div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5; color: #333;"><p style="margin: 0 0 10px 0;">Merhabalar,</p><p style="margin: 0 0 10px 0;">Türk Patent ve Marka Kurumu nezdinde adınıza başvurusu yapılmış/ tescillenmiş olan markalarınızın, 6769 Sayılı Sınai Mülkiyet Kanunu hükümlerine göre düzenli olarak yayınlanan Resmi Marka Bültenlerinde izlemesini yapıyoruz.</p><p style="margin: 0 0 10px 0;"><b>${dateStr} tarih ve ${bulletinNoStr} sayılı</b> Resmi Marka Bülteninde yaptığımız <b style="color: #c00000;">inceleme neticesinde hak sahibi olduğunuz ${markDetailsStr} sınıflarında (eş/benzer) marka başvurusu tespit edilmiştir. Detaylı bilgi ekte iletilmiştir.</b></p><p style="margin: 0 0 10px 0;"><b style="color: #c00000;">Markalarınız açısından risk teşkil ettiği kanaatindeyseniz tescili alınmadan gerekli itirazın yapılması önerimizdir.<br>Süreli işlemler olduğundan konu ile alakalı geri bildirim yapmanızı rica ederiz.</b></p><p style="margin: 0 0 5px 0;"><b>Markalar;</b></p><ul style="margin: 0 0 15px 0; padding-left: 20px; list-style-type: disc;">${similarMarksList}</ul><p style="margin: 0 0 10px 0;">Saygılarımla,</p><br><img src="https://qmotrqehdzebojdowuol.supabase.co/storage/v1/object/public/firm-logos/assets/mail-signature.png" alt="Üstün Patent" style="width: 400px; height: auto;" /></div>`;
 
         setMailSubject(subject);
         setMailContent(content);
@@ -207,7 +223,7 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
             </ul>
             <p style="margin: 0 0 10px 0;">Saygılarımla,</p>
             <br>
-            <img src="/images/mail-signature.png?v=${new Date().getTime()}" alt="Üstün Patent" style="max-width: 300px; height: auto;" />
+            <img src="https://qmotrqehdzebojdowuol.supabase.co/storage/v1/object/public/firm-logos/assets/mail-signature.png" alt="Üstün Patent" style="width: 400px; height: auto;" />
         </div>`;
 
         setMailSubject(subject);

@@ -1,8 +1,11 @@
 import FirmForm from "@/components/firms/FirmForm";
 import Link from "next/link";
 import { LucideArrowLeft } from "lucide-react";
+import { getAgencySettings } from "@/actions/settings";
 
-export default function NewFirmPage() {
+export default async function NewFirmPage() {
+    const settings = await getAgencySettings();
+
     return (
         <div className="space-y-6">
             <Link
@@ -14,7 +17,7 @@ export default function NewFirmPage() {
             </Link>
 
             <div className="max-w-5xl mx-auto">
-                <FirmForm />
+                <FirmForm consultants={settings.consultants} />
             </div>
         </div>
     );
