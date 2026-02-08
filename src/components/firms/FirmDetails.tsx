@@ -448,10 +448,15 @@ export default function FirmDetails({ firm, trademarks, agencySettings }: { firm
                                                         ) : (
                                                             <button
                                                                 onClick={() => {
+                                                                    if (action.metadata?.subject?.includes('Benzer Markaya Rastlanılmadı')) return;
                                                                     setContractAction(action);
                                                                     setIsContractModalOpen(true);
                                                                 }}
-                                                                className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-purple-700 bg-purple-50 hover:bg-purple-100 rounded border border-purple-200 transition-colors"
+                                                                disabled={action.metadata?.subject?.includes('Benzer Markaya Rastlanılmadı')}
+                                                                className={`flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded border transition-colors ${action.metadata?.subject?.includes('Benzer Markaya Rastlanılmadı')
+                                                                        ? 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed opacity-50'
+                                                                        : 'text-purple-700 bg-purple-50 hover:bg-purple-100 border-purple-200'
+                                                                    }`}
                                                             >
                                                                 <LucideFileText size={14} />
                                                                 Sözleşme Oluştur
