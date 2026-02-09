@@ -3,7 +3,7 @@
 'use client';
 
 
-import { useState, useMemo, useTransition, useEffect, Fragment } from 'react';
+import { useState, useMemo, useTransition, useEffect, Fragment, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, LucideSearch, LucideShieldCheck, LucideDownload, LucideX } from 'lucide-react';
 import BulletinTable, { BulletinMark } from '@/components/bulletins/BulletinTable';
@@ -15,6 +15,7 @@ import { sendTrademarkNotification } from '@/actions/mail';
 import { toast } from 'sonner';
 
 import { FirmCombobox } from '@/components/firms/FirmCombobox';
+import { MultiEmailInput } from '@/components/ui/multi-email-input';
 import { getFirmTrademarks, getFirm } from '@/actions/firms';
 import { searchBulletinMarks } from '@/actions/bulletins';
 
@@ -56,7 +57,20 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
     const [isMailModalOpen, setIsMailModalOpen] = useState(false);
     const [mailSubject, setMailSubject] = useState('');
     const [mailContent, setMailContent] = useState('');
+    const [emailCC, setEmailCC] = useState<string[]>([]); // New state for CC
     const [isSendingMail, setIsSendingMail] = useState(false);
+    const editorRef = useRef<HTMLDivElement>(null);
+
+    // Sync editor content when mailContent changes (e.g. template load)
+    useEffect(() => {
+        if (editorRef.current && isMailModalOpen) {
+            // Only update if content is significantly different to avoid cursor jumps if we were using state
+            // But here we only update on modal open or template change not on every keystroke
+            if (editorRef.current.innerHTML !== mailContent) {
+                editorRef.current.innerHTML = mailContent;
+            }
+        }
+    }, [mailContent, isMailModalOpen]);
 
     // Client-side pagination state
     const [clientPage, setClientPage] = useState(1);
@@ -193,12 +207,24 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
 
         const similarMarksList = mailQueue.map(item => `<li><b>${item.similarMarkName} - (${item.similarMarkAppNo})</b> (${item.watchedMarkName} markasının benzer markası)</li>`).join('');
 
+        // Watch Agreement Marks
+        const watchedMarksList = firmTrademarks
+            .filter(t => t.watch_agreement)
+            .map(t => {
+                const label = t.application_no ? `${t.name} (${t.application_no})` : t.name;
+                return `<li>${label}</li>`;
+            })
+            .join('');
+
         const subject = `Bülten Takibi/${year} ${monthName} Ayı Benzer Markaya Rastlanıldı !!!`;
 
-        const content = `<div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5; color: #333;"><p style="margin: 0 0 10px 0;">Merhabalar,</p><p style="margin: 0 0 10px 0;">Türk Patent ve Marka Kurumu nezdinde adınıza başvurusu yapılmış/ tescillenmiş olan markalarınızın, 6769 Sayılı Sınai Mülkiyet Kanunu hükümlerine göre düzenli olarak yayınlanan Resmi Marka Bültenlerinde izlemesini yapıyoruz.</p><p style="margin: 0 0 10px 0;"><b>${dateStr} tarih ve ${bulletinNoStr} sayılı</b> Resmi Marka Bülteninde yaptığımız <b style="color: #c00000;">inceleme neticesinde hak sahibi olduğunuz ${markDetailsStr} sınıflarında (eş/benzer) marka başvurusu tespit edilmiştir. Detaylı bilgi ekte iletilmiştir.</b></p><p style="margin: 0 0 10px 0;"><b style="color: #c00000;">Markalarınız açısından risk teşkil ettiği kanaatindeyseniz tescili alınmadan gerekli itirazın yapılması önerimizdir.<br>Süreli işlemler olduğundan konu ile alakalı geri bildirim yapmanızı rica ederiz.</b></p><p style="margin: 0 0 5px 0;"><b>Markalar;</b></p><ul style="margin: 0 0 15px 0; padding-left: 20px; list-style-type: disc;">${similarMarksList}</ul><p style="margin: 0 0 10px 0;">Saygılarımla,</p><br><img src="https://qmotrqehdzebojdowuol.supabase.co/storage/v1/object/public/firm-logos/assets/mail-signature.png" alt="Üstün Patent" style="width: 400px; height: auto;" /></div>`;
+        const content = `<div style="font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5; color: #333;"><p style="margin: 0 0 10px 0;">Merhabalar,</p><p style="margin: 0 0 10px 0;">Türk Patent ve Marka Kurumu nezdinde adınıza başvurusu yapılmış/ tescillenmiş olan markalarınızın, 6769 Sayılı Sınai Mülkiyet Kanunu hükümlerine göre düzenli olarak yayınlanan Resmi Marka Bültenlerinde izlemesini yapıyoruz.</p><p style="margin: 0 0 10px 0;"><b>${dateStr} tarih ve ${bulletinNoStr} sayılı</b> Resmi Marka Bülteninde yaptığımız <b style="color: #c00000;">inceleme neticesinde hak sahibi olduğunuz ${markDetailsStr} sınıflarında (eş/benzer) marka başvurusu tespit edilmiştir. Detaylı bilgi ekte iletilmiştir.</b></p><p style="margin: 0 0 10px 0;"><b style="color: #c00000;">Markalarınız açısından risk teşkil ettiği kanaatindeyseniz tescili alınmadan gerekli itirazın yapılması önerimizdir.<br>Süreli işlemler olduğundan konu ile alakalı geri bildirim yapmanızı rica ederiz.</b></p><p style="margin: 0 0 5px 0;"><b>Markalar;</b></p><ul style="margin: 0 0 15px 0; padding-left: 20px; list-style-type: disc;">${similarMarksList}</ul>
+        ${watchedMarksList ? `<p style="margin: 0 0 5px 0;"><b>İzlenen Tüm Markalar;</b></p><ul style="margin: 0 0 15px 0; padding-left: 20px; list-style-type: disc;">${watchedMarksList}</ul>` : ''}
+        <p style="margin: 0 0 10px 0;">Saygılarımla,</p><br><img src="https://qmotrqehdzebojdowuol.supabase.co/storage/v1/object/public/firm-logos/assets/mail-signature.png" alt="Üstün Patent" style="width: 400px; height: auto;" /></div>`;
 
         setMailSubject(subject);
         setMailContent(content);
+        setEmailCC([]); // Reset CC
         setIsMailModalOpen(true);
     };
 
@@ -209,7 +235,10 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
         const dateStr = date.toLocaleDateString('tr-TR');
         const bulletinNoStr = '***BÜLTEN NUMARASINI YAZIN***';
 
-        const marksList = firmTrademarks.map(t => `<li style="margin-bottom: 5px;">${t.name}</li>`).join('');
+        const marksList = firmTrademarks.map(t => {
+            const label = t.application_no ? `${t.name} (${t.application_no})` : t.name;
+            return `<li style="margin-bottom: 5px;">${label}</li>`;
+        }).join('');
 
         const subject = `Bülten Takibi/${year} ${monthName} Ayı Benzer Markaya Rastlanılmadı`;
 
@@ -229,6 +258,7 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
         setMailSubject(subject);
         setMailContent(content);
         setMailQueue([]); // Clear queue as this is a "no match" mail
+        setEmailCC([]); // Reset CC
         setIsMailModalOpen(true);
     };
 
@@ -280,7 +310,9 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
             }
 
             console.log('Sending to server action...', validAttachments.length, 'attachments');
-            const result = await sendTrademarkNotification(selectedFirmId, mailContent, mailSubject, validAttachments);
+            // Get content from ref instead of state to ensure we have latest edits without re-renders
+            const currentContent = editorRef.current?.innerHTML || mailContent;
+            const result = await sendTrademarkNotification(selectedFirmId, currentContent, mailSubject, validAttachments, emailCC);
             console.log('Server response:', result);
 
             if (result && result.success) {
@@ -704,12 +736,19 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
                                     />
                                 </div>
 
+                                <div className="space-y-1">
+                                    <MultiEmailInput
+                                        value={emailCC}
+                                        onChange={setEmailCC}
+                                        consultants={agencySettings?.consultants || []}
+                                    />
+                                </div>
+
                                 <div>
                                     <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">İçerik</label>
                                     <div
                                         contentEditable
-                                        dangerouslySetInnerHTML={{ __html: mailContent }}
-                                        onInput={(e) => setMailContent(e.currentTarget.innerHTML)}
+                                        ref={editorRef}
                                         className="w-full p-2 border rounded text-sm focus:outline-blue-600 font-sans min-h-[300px] max-h-[500px] overflow-y-auto"
                                     />
                                 </div>

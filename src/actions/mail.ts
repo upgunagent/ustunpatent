@@ -9,7 +9,8 @@ export async function sendEmail(
     subject: string,
     text: string,
     attachments: any[] = [], // Allow generic attachments (path, cid, content)
-    html?: string
+    html?: string,
+    cc?: string[]
 ) {
     try {
         const nodemailer = require('nodemailer');
@@ -40,6 +41,7 @@ export async function sendEmail(
         await transporter.sendMail({
             from: '"Üstün Patent" <web@ustunpatent.com>',
             to: to,
+            cc: cc, // Add CC support
             subject: subject,
             text: text,
             html: html,
@@ -58,7 +60,8 @@ export async function sendTrademarkNotification(
     firmId: string,
     emailContent: string, // Treat this as HTML
     subject: string,
-    attachmentData: { filename: string, content: string }[]
+    attachmentData: { filename: string, content: string }[],
+    ccRecipients: string[] = [] // New parameter
 ) {
     try {
         const supabase = await createClient();
@@ -120,7 +123,7 @@ export async function sendTrademarkNotification(
             'src="cid:signature"'
         );
 
-        const result = await sendEmail(toEmail, subject, plainText, attachments, finalHtmlContent);
+        const result = await sendEmail(toEmail, subject, plainText, attachments, finalHtmlContent, ccRecipients);
 
         if (!result.success) {
             return { success: false, message: `Sunucu hatası: ${result.message}` };
@@ -139,7 +142,8 @@ export async function sendTrademarkNotification(
                     full_content: emailContent,
                     attachment_count: attachments.length,
                     attachment_names: attachments.map(a => a.filename),
-                    sent_to: toEmail
+                    sent_to: toEmail,
+                    cc: ccRecipients // Log CC
                 }
             });
 
@@ -173,7 +177,8 @@ export async function sendContractEmail(
     firmId: string,
     emailContent: string,
     subject: string,
-    attachmentData: { filename: string, content: string }[]
+    attachmentData: { filename: string, content: string }[],
+    ccRecipients: string[] = [] // New parameter
 ) {
     try {
         const supabase = await createClient();
@@ -221,7 +226,7 @@ export async function sendContractEmail(
             'src="cid:signature"'
         );
 
-        const result = await sendEmail(toEmail, subject, plainText, attachments, finalHtmlContent);
+        const result = await sendEmail(toEmail, subject, plainText, attachments, finalHtmlContent, ccRecipients);
 
         if (!result.success) {
             return { success: false, message: `Mail gönderilemedi: ${result.message}` };
@@ -287,6 +292,7 @@ export async function sendContractEmail(
                     attachment_count: attachments.length,
                     attachment_names: attachments.filter((a: any) => !a.cid).map((a: any) => a.filename),
                     sent_to: toEmail,
+                    cc: ccRecipients, // Log CC
                     pdf_url: pdfUrl
                 }
             });

@@ -15,7 +15,7 @@ function levenshteinDistance(s1: string, s2: string): number {
     s1 = s1.toLowerCase();
     s2 = s2.toLowerCase();
 
-    const costs = new Array();
+    const costs = [];
     for (let i = 0; i <= s1.length; i++) {
         let lastValue = i;
         for (let j = 0; j <= s2.length; j++) {

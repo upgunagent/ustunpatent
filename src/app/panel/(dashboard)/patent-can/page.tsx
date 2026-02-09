@@ -23,7 +23,7 @@ export default async function PatentCanPage() {
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFtb3RycWVoZHplYm9qZG93dW9sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgyMzI5MjQsImV4cCI6MjA4MzgwODkyNH0.tRCTYAcMOSWA1z_TSk4-HwyS74f1s01lYfIDO_NV_Ls';
 
     let messages: ChatMessage[] = [];
-    let error = null;
+    const error = null;
 
     try {
         const res = await httpsGet(`${SUPABASE_URL}/rest/v1/n8n_chat_histories?select=*&order=id.desc`, {

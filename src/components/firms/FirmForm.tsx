@@ -226,6 +226,14 @@ export default function FirmForm({ consultants }: { consultants: any[] }) {
                                 />
                             </div>
                             <div className="grid gap-2">
+                                <label className="text-sm font-medium text-gray-700">Doğum Tarihi</label>
+                                <input
+                                    name="individual_born_date"
+                                    type="date"
+                                    className="flex h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#001a4f] focus:border-transparent"
+                                />
+                            </div>
+                            <div className="grid gap-2">
                                 <label className="text-sm font-medium text-gray-700">Adres</label>
                                 <textarea
                                     name="individual_address"

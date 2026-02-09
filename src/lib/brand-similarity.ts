@@ -186,7 +186,7 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
 
     // --- A) Token Score ---
     let tokenScore = 0;
-    let matchedTokenList: string[] = [];
+    const matchedTokenList: string[] = [];
     let matchType = "";
 
     // Identify generic tokens in candidate
@@ -289,7 +289,7 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
         if (jwTotal < 0.6) rawCharScore = 0;
 
         // Token-wise fuzzy
-        let fuzzyTokenScores: number[] = [];
+        const fuzzyTokenScores: number[] = [];
 
         for (const qt of meaningfulQTokens) {
             let bestTokenMatch = 0;

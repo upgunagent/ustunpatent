@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import ContractModal from './ContractModal';
 import TrademarkForm from './TrademarkForm';
@@ -8,7 +8,6 @@ import { LucideBuilding2, LucideUser, LucidePlus, LucideExternalLink, LucidePhon
 import EditableField from '../ui/editable-field';
 import { SECTORS } from '@/constants/sectors';
 import { getFirmHistory, updateActionStatus } from '@/actions/history';
-import { useEffect } from 'react';
 import { toast } from 'sonner';
 import { LucideHistory, LucideCheckCircle, LucideXCircle, LucideClock, LucideEye, LucideTrash2 } from 'lucide-react';
 
@@ -159,6 +158,7 @@ export default function FirmDetails({ firm, trademarks, agencySettings }: { firm
                 </div>
             </div>
 
+
             <div className="grid gap-8 lg:grid-cols-3">
                 {/* Sol Kolon: Firma Detay Kartı */}
                 <div className="lg:col-span-1 space-y-6">
@@ -185,6 +185,7 @@ export default function FirmDetails({ firm, trademarks, agencySettings }: { firm
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <EditableField firmId={firm.id} field="individual_tc" value={firm.individual_tc} label="TC Kimlik No" />
+                                        <EditableField firmId={firm.id} field="individual_born_date" value={firm.individual_born_date} label="Doğum Tarihi" type="date" />
                                         <EditableField firmId={firm.id} field="individual_address" value={firm.individual_address} multiline label="Adres" />
                                     </div>
                                 </>
@@ -291,15 +292,35 @@ export default function FirmDetails({ firm, trademarks, agencySettings }: { firm
                                                 <td className="px-6 py-4">{formatDate(t.watch_end_date)}</td>
                                                 <td className="px-6 py-4">{t.consultant_name}</td>
                                                 <td className="px-6 py-4 text-right">
-                                                    <button
-                                                        onClick={() => {
-                                                            setEditingTrademark(t);
-                                                            setIsTrademarkModalOpen(true);
-                                                        }}
-                                                        className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#001a4f] focus:ring-offset-2 transition-all"
-                                                    >
-                                                        İncele/Düzenle
-                                                    </button>
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <button
+                                                            onClick={async () => {
+                                                                if (!confirm('Bu markayı silmek istediğinize emin misiniz?')) return;
+
+                                                                const { deleteTrademark } = await import('@/actions/firms');
+                                                                const result = await deleteTrademark(t.id, firm.id);
+
+                                                                if (result.success) {
+                                                                    toast.success(result.message);
+                                                                } else {
+                                                                    toast.error(result.message);
+                                                                }
+                                                            }}
+                                                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                                            title="Markayı Sil"
+                                                        >
+                                                            <LucideTrash2 size={18} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                setEditingTrademark(t);
+                                                                setIsTrademarkModalOpen(true);
+                                                            }}
+                                                            className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-[#001a4f] focus:ring-offset-2 transition-all"
+                                                        >
+                                                            İncele/Düzenle
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))
@@ -454,8 +475,8 @@ export default function FirmDetails({ firm, trademarks, agencySettings }: { firm
                                                                 }}
                                                                 disabled={action.metadata?.subject?.includes('Benzer Markaya Rastlanılmadı')}
                                                                 className={`flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded border transition-colors ${action.metadata?.subject?.includes('Benzer Markaya Rastlanılmadı')
-                                                                        ? 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed opacity-50'
-                                                                        : 'text-purple-700 bg-purple-50 hover:bg-purple-100 border-purple-200'
+                                                                    ? 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed opacity-50'
+                                                                    : 'text-purple-700 bg-purple-50 hover:bg-purple-100 border-purple-200'
                                                                     }`}
                                                             >
                                                                 <LucideFileText size={14} />

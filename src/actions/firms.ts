@@ -25,6 +25,7 @@ export async function createFirm(formData: FormData) {
     if (type === 'individual') {
         newFirm.individual_name_surname = formData.get('individual_name_surname');
         newFirm.individual_tc = formData.get('individual_tc');
+        newFirm.individual_born_date = formData.get('individual_born_date') || null;
         newFirm.individual_address = formData.get('individual_address');
     } else {
         newFirm.corporate_title = formData.get('corporate_title');
@@ -270,4 +271,61 @@ export async function deleteFirmAction(actionId: string) {
 
     revalidatePath('/panel/firms/[id]', 'page');
     return { success: true, message: 'İşlem başarıyla silindi.' };
+}
+
+export async function deleteTrademark(trademarkId: string, firmId: string) {
+    const supabase = await createClient();
+
+    const { error } = await supabase
+        .from('firm_trademarks')
+        .delete()
+        .eq('id', trademarkId);
+
+    if (error) {
+        console.error('Error deleting trademark:', error);
+        return { success: false, message: 'Marka silinirken hata oluştu.' };
+    }
+
+    revalidatePath(`/panel/firms/${firmId}`);
+    return { success: true, message: 'Marka başarıyla silindi.' };
+}
+
+export async function deleteFirm(firmId: string) {
+    const supabase = await createClient();
+
+    // 1. Delete Firm Actions
+    const { error: actionsError } = await supabase
+        .from('firm_actions')
+        .delete()
+        .eq('firm_id', firmId);
+
+    if (actionsError) {
+        console.error('Error deleting firm actions:', actionsError);
+        return { success: false, message: 'Firma işlemleri silinirken hata oluştu.' };
+    }
+
+    // 2. Delete Firm Trademarks
+    const { error: trademarksError } = await supabase
+        .from('firm_trademarks')
+        .delete()
+        .eq('firm_id', firmId);
+
+    if (trademarksError) {
+        console.error('Error deleting firm trademarks:', trademarksError);
+        return { success: false, message: 'Firma markaları silinirken hata oluştu.' };
+    }
+
+    // 3. Delete Firm
+    const { error } = await supabase
+        .from('firms')
+        .delete()
+        .eq('id', firmId);
+
+    if (error) {
+        console.error('Error deleting firm:', error);
+        return { success: false, message: 'Firma silinirken hata oluştu: ' + error.message };
+    }
+
+    revalidatePath('/panel/firms');
+    return { success: true, message: 'Firma ve tüm verileri başarıyla silindi.' };
 }

@@ -43,7 +43,7 @@ export default function BulletinTable({ data, highlightedClasses = [], onCompare
     // Helper to clean text
     const cleanText = (text: string, isDate: boolean = false) => {
         if (!text) return "";
-        let cleaned = text
+        const cleaned = text
             .replace(/türk patent ve marka/gi, "")
             .replace(/\(kurumu\)/gi, "")
             .replace(/resmi marka bülteni/gi, "")

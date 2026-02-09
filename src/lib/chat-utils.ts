@@ -5,7 +5,7 @@
 export const cleanContent = (text: string) => {
     if (!text) return "";
 
-    let cleaned = text
+    const cleaned = text
         // Remove n8n specific logs (entire blocks)
         .replace(/\[Used tools:.*?\]/g, "")
         .replace(/\[Hostname=.*?\]/g, "")

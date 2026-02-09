@@ -9,7 +9,7 @@ interface EditableFieldProps {
     field: string;
     value: string | null | undefined;
     label?: string;
-    type?: 'text' | 'email' | 'url' | 'tel';
+    type?: 'text' | 'email' | 'url' | 'tel' | 'date';
     multiline?: boolean;
     options?: string[]; // If provided, renders a select
     onUpdate?: () => void;

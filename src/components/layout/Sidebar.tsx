@@ -56,11 +56,19 @@ export default function Sidebar() {
                 </Link>
                 <Link
                     href="/panel/marka-izleme"
-                    className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${isActive('/panel/marka-izleme') ? 'bg-white/10' : 'hover:bg-white/10'
+                    className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${pathname === '/panel/marka-izleme' ? 'bg-white/10' : 'hover:bg-white/10'
                         }`}
                 >
                     <LucideEye size={24} />
                     Marka İzleme
+                </Link>
+                <Link
+                    href="/panel/marka-izleme/izlenen-markalar"
+                    className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ml-4 ${isActive('/panel/marka-izleme/izlenen-markalar') ? 'bg-white/10 text-white' : 'text-gray-300 hover:bg-white/10 hover:text-white'
+                        }`}
+                >
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 mr-1"></span>
+                    İzlenen Markalar
                 </Link>
                 <Link
                     href="/panel/marka-arastirma"

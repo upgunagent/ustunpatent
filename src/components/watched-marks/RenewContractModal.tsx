@@ -1,71 +1,51 @@
-import { useState, useEffect } from 'react';
-import { LucideX, LucideFileText, LucideSend, LucideDownload, LucideRefreshCcw, LucideMail } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { LucideX, LucideFileText, LucideSend, LucideDownload, LucideRefreshCcw, LucideMail, LucideCheck } from 'lucide-react';
 import { ContractData, generateContractPDF } from '@/lib/contract-pdf';
 import { toast } from 'sonner';
 import { sendContractEmail } from '@/actions/mail';
+import { getFirmTrademarks } from '@/actions/firms';
 import { MultiEmailInput } from '@/components/ui/multi-email-input';
+import { WatchedTrademark } from '@/actions/watched-marks';
 
-interface ContractModalProps {
+interface RenewContractModalProps {
     onClose: () => void;
-    firm: any;
-    trademarks: any[];
-    action: any; // The selected history action
+    trademark: WatchedTrademark;
+    firmEmail: string | null;
+    firmId: string;
     agencySettings: any;
 }
 
-export default function ContractModal({ onClose, firm, trademarks, action, agencySettings }: ContractModalProps) {
-    // 1. Parse Initial Data
-    // Find similar marks from action full content if possible
-    const [similarMarksOptions, setSimilarMarksOptions] = useState<string[]>([]);
+export default function RenewContractModal({ onClose, trademark, firmEmail, firmId, agencySettings }: RenewContractModalProps) {
+    // 1. Initial Data Preparation
+    const today = new Date();
+    const futureDate = new Date(today);
+    futureDate.setDate(today.getDate() + 15);
+    const validUntilDate = futureDate.toLocaleDateString('tr-TR');
 
-    useEffect(() => {
-        if (action?.metadata?.full_content) {
-            const content = action.metadata.full_content;
-            const newOptions: string[] = [];
-
-            // Extract content from all <li> tags
-            // The email contains the pre-formatted string we want: "MarkName - (AppNo) (ClientMark benzer markası)"
-            const listRegex = /<li[^>]*>(.*?)<\/li>/gi;
-            const matches = [...content.matchAll(listRegex)];
-
-            matches.forEach(m => {
-                let text = m[1];
-                // Remove HTML tags (like <b>, </b>) to get clean text
-                text = text.replace(/<[^>]+>/g, '');
-                // Decode basic entities
-                text = text.replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&');
-
-                if (text.trim()) {
-                    newOptions.push(text.trim());
-                }
-            });
-
-            // Deduplicate
-            setSimilarMarksOptions([...new Set(newOptions)]);
-        }
-    }, [action]);
+    // Firm Info from Trademark Data
+    const firm = trademark.firm_info;
 
     // 2. Form State
     const [formData, setFormData] = useState<ContractData>({
-        // Client
-        clientType: firm.type,
-        clientName: firm.type === 'corporate' ? (firm.corporate_title || firm.name) : (firm.individual_name_surname || firm.name),
-        clientAddress: (firm.type === 'corporate' ? firm.corporate_address : firm.individual_address)?.replace(/\n/g, ' ') || '',
-        clientTC: firm.individual_tc,
-        clientTaxOffice: firm.corporate_tax_office,
-        clientTaxNumber: firm.corporate_tax_number,
-        clientEmail: firm.email,
-        clientPhone: firm.phone,
-        clientWeb: firm.web_address || firm.website || '',
-        clientBornDate: firm.individual_born_date || '',
+        // Client - Auto-fill from firm info
+        clientType: (firm?.type as 'individual' | 'corporate') || 'corporate',
+        clientName: firm?.corporate_title || firm?.individual_name_surname || trademark.rights_owner || '',
+        clientAddress: firm?.address || '',
+        clientTC: firm?.tc_no || '',
+        clientTaxOffice: firm?.tax_office || '',
+        clientTaxNumber: firm?.tax_number || '',
+        clientEmail: firm?.email || firmEmail || '',
+        clientPhone: firm?.phone || '',
+        clientWeb: firm?.website || '',
+        clientBornDate: firm?.born_date || '',
 
         // Transaction
-        transactionType: 'YAYIMA İTİRAZ',
-        markName: trademarks.length > 0 ? (trademarks[0].application_no ? `${trademarks[0].name} (${trademarks[0].application_no})` : trademarks[0].name) : '',
+        transactionType: 'MARKA İZLEME YENİLEME',
+        markName: trademark.mark_name || '',
         markType: '',
         goodsServices: '',
-        objectionMarks: '', // User will select from options or type
-        description: '',
+        objectionMarks: '',
+        description: 'Marka izleme süresinin 1 yıl uzatılması işlemi', // Updated text
         riskStatus: '',
 
         // Fees
@@ -73,46 +53,109 @@ export default function ContractModal({ onClose, firm, trademarks, action, agenc
         attorneyFeeIncluded: true,
         feeAmount: '',
         vatRate: 20,
-        paymentMethod: '',
-        paymentDate: '',
+        paymentMethod: 'Havale/EFT',
+        paymentDate: today.toISOString().split('T')[0],
 
         // Agency
-        bankAccounts: agencySettings.bankAccounts || [],
-        consultatName: '', // Initially empty, user selects
-        consultantTitle: 'Operasyon Destek Uzmanı'
+        bankAccounts: agencySettings?.bankAccounts || [],
+        consultatName: (trademark.consultant_name && trademark.consultant_name !== '-') ? trademark.consultant_name : '',
+        consultantTitle: 'Marka Danışmanı'
     });
-
-    // Helper to format mark name with app no
-    const formatMarkName = (name: string, appNo: string | null | undefined) => {
-        return appNo ? `${name} (${appNo})` : name;
-    };
-
-    // Helper to handle mark toggles (Multi-select)
-    const handleMarkToggle = (mark: string) => {
-        const current = formData.markName ? formData.markName.split(', ').filter(Boolean) : [];
-        let updated;
-        if (current.includes(mark)) {
-            updated = current.filter(m => m !== mark);
-        } else {
-            updated = [...current, mark];
-        }
-        handleInputChange('markName', updated.join(', '));
-    };
 
     const [pdfUrl, setPdfUrl] = useState<string | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
 
+    // Multi-select Marks State
+    const [firmTrademarks, setFirmTrademarks] = useState<any[]>([]);
+
+    const formatMarkName = (name: string | null, appNo: string | null) => {
+        if (!name) return '';
+        return appNo ? `${name} (${appNo})` : name;
+    };
+
+    const initialMarkName = formatMarkName(trademark.mark_name, trademark.application_no);
+    const [selectedMarks, setSelectedMarks] = useState<string[]>(initialMarkName ? [initialMarkName] : []);
+    const [isMarkSelectOpen, setIsMarkSelectOpen] = useState(false);
+
+    // Fetch firm trademarks on mount
+    useEffect(() => {
+        getFirmTrademarks(firmId).then(marks => {
+            setFirmTrademarks(marks);
+        });
+    }, [firmId]);
+
+    useEffect(() => {
+        // Update markName in formData when selection changes
+        setFormData(prev => ({ ...prev, markName: selectedMarks.join(', ') }));
+    }, [selectedMarks]);
+
+
     // Mail Preview State
     const [isMailPreviewOpen, setIsMailPreviewOpen] = useState(false);
-    const [mailSubject, setMailSubject] = useState('Bülten İtiraz Onay Sözleşmesi Hk.');
+    const [mailSubject, setMailSubject] = useState('Marka Bülten Takibi Yenileme Sözleşmesi Hk.');
     const [isSending, setIsSending] = useState(false);
-    const [emailCC, setEmailCC] = useState<string[]>([]); // New state for CC
+    const [emailCC, setEmailCC] = useState<string[]>([]);
     const [generatedPdfBlob, setGeneratedPdfBlob] = useState<Blob | null>(null);
+
+    const editorRef = useRef<HTMLDivElement>(null);
+
+    // Default Mail Content
+    const defaultMailContent = `
+        <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333; line-height: 1.5;">
+            <p>Merhabalar,</p>
+            <br>
+            <p>Ekte bilgileri yer alan markanızın bülten takip süresi sona ermiştir.</p>
+            <p>Onayınız doğrultusunda, markanız <b>1 yıl süreyle</b> yeniden takibe alınacaktır.</p>
+            <br>
+            <p>Tarafınıza özel indirim uygulanmış olup, ödenmesi gereken tutar ekte bilgilerinize sunulmuştur.</p>
+            <br>
+            <p><b>İşlem sürelidir. ${validUntilDate} tarihine kadar olumlu ya da olumsuz bir geri dönüş yapılmaması halinde, markanız sistemden otomatik olarak düşecek ve izleme işlemleri durdurulacaktır.</b></p>
+            <br>
+            <p><b>“Bülten Takibi Hizmeti”</b> hakkında kısaca bilgi vermek isteriz:</p>
+            <br>
+            <ul style="list-style-type: disc; padding-left: 20px;">
+                <li><b>1 yıl süreyle geçerlidir.</b></li>
+                <li>Sektörünüzde markanıza <b>benzer veya aynı</b> başvurular düzenli olarak takip edilir.</li>
+                <li>Her ay size aylık rapor gönderilir.</li>
+                <li><b>Tescil edilmeden markayı iptal ettirme imkânı sunar.</b><br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&rarr; <u>Tescil edilen bir marka yalnızca mahkeme kararıyla iptal edilebilir.</u></li>
+                <li>Böylece <b>mahkeme süreçlerine kıyasla çok daha düşük maliyetlerle</b> markanıza etkin koruma sağlanır.</li>
+                <li>Benzer bir marka tespit edilirse, <b>itiraz süreci</b> başlatma imkânı sunar.</li>
+                <li><b>Taklit ve karışıklıkları önleyerek</b> markanıza 360° koruma kazandırır.</li>
+            </ul>
+            <br>
+            <p>Bu hizmet, markanızın uzun vadeli güvenliği ve sürdürülebilir değeri için <b>önemli bir yatırımdır.</b></p>
+            <br>
+            <p>Saygılarımla</p>
+            <img src="https://qmotrqehdzebojdowuol.supabase.co/storage/v1/object/public/firm-logos/assets/mail-signature.png" alt="Üstün Patent" style="display: block; margin-top: 10px; width: 400px; height: auto;" />
+        </div>
+    `;
+
+    const [mailContent, setMailContent] = useState(defaultMailContent);
+
+    const updatePdf = useCallback(async () => {
+        setIsGenerating(true);
+        try {
+            // Format Date for PDF: YYYY-MM-DD -> DD.MM.YYYY
+            const formattedDate = formData.paymentDate
+                ? new Date(formData.paymentDate).toLocaleDateString('tr-TR')
+                : formData.paymentDate;
+
+            const pdfData = { ...formData, paymentDate: formattedDate };
+            const url = await generateContractPDF(pdfData);
+            setPdfUrl(url.toString());
+        } catch (e) {
+            console.error(e);
+            toast.error('PDF oluşturulamadı');
+        } finally {
+            setIsGenerating(false);
+        }
+    }, [formData]);
 
     // Initial PDF Generation
     useEffect(() => {
         updatePdf();
-    }, []); // Run once on mount, then on manual update or debounced? Let's use manual "Güncelle" button or effect on data change
+    }, [updatePdf]);
 
     // Debounced PDF update effect
     useEffect(() => {
@@ -120,35 +163,20 @@ export default function ContractModal({ onClose, firm, trademarks, action, agenc
             updatePdf();
         }, 1000);
         return () => clearTimeout(timer);
-    }, [formData]);
-
-    const updatePdf = async () => {
-        setIsGenerating(true);
-        try {
-            const url = await generateContractPDF(formData);
-            setPdfUrl(url.toString());
-
-            // Allow revoke? Browser handles blob url gc usually, but good practice.
-            // window.URL.revokeObjectURL(oldUrl); 
-        } catch (e) {
-            console.error(e);
-            toast.error('PDF oluşturulamadı');
-        } finally {
-            setIsGenerating(false);
-        }
-    };
+    }, [formData, updatePdf]);
 
     const handleInputChange = (field: keyof ContractData, value: any) => {
         setFormData(prev => ({ ...prev, [field]: value }));
     };
 
-    const handleObjectionMarkToggle = (mark: string) => {
-        const current = formData.objectionMarks ? formData.objectionMarks.split('\n') : [];
-        if (current.includes(mark)) {
-            handleInputChange('objectionMarks', current.filter(m => m !== mark).join('\n'));
-        } else {
-            handleInputChange('objectionMarks', [...current, mark].join('\n'));
-        }
+    const handleMarkToggle = (markName: string) => {
+        setSelectedMarks(prev => {
+            if (prev.includes(markName)) {
+                return prev.filter(m => m !== markName);
+            } else {
+                return [...prev, markName];
+            }
+        });
     };
 
     const handleAddToMail = async () => {
@@ -156,7 +184,7 @@ export default function ContractModal({ onClose, firm, trademarks, action, agenc
             const response = await fetch(pdfUrl);
             const blob = await response.blob();
             setGeneratedPdfBlob(blob);
-            setEmailCC([]); // Reset CC
+            setEmailCC([]);
             setIsMailPreviewOpen(true);
         }
     };
@@ -184,21 +212,11 @@ export default function ContractModal({ onClose, firm, trademarks, action, agenc
                 const base64data = reader.result as string;
                 const base64Content = base64data.split(',')[1];
 
-                const mailContent = `
-                <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333;">
-                    <p>Merhabalar,</p>
-                    <br>
-                    <p>Hazırlanan sözleşmemiz ekte yer almaktadır. Sözleşme onayı akabinde fatura işlemlerine geçilecektir. Bu maile "<b>tümünü yanıtla</b>" ile geri dönüş yapıp onay vermenizi rica ederiz.</p>
-                    <br>
-                    <p>Teşekkürler.</p>
-                    <p>Saygılarımla</p>
-                    <img src="https://qmotrqehdzebojdowuol.supabase.co/storage/v1/object/public/firm-logos/assets/mail-signature.png" alt="Üstün Patent" style="display: block; margin-top: 10px; width: 400px; height: auto;" />
-                </div>
-                `;
+                const currentContent = editorRef.current?.innerHTML || mailContent;
 
                 const result = await sendContractEmail(
-                    firm.id,
-                    mailContent,
+                    firmId,
+                    currentContent,
                     mailSubject,
                     [{ filename: `Sözleşme - ${formData.clientName}.pdf`, content: base64Content }],
                     emailCC
@@ -207,8 +225,6 @@ export default function ContractModal({ onClose, firm, trademarks, action, agenc
                 if (result.success) {
                     toast.success(result.message);
                     onClose();
-                    // trigger refresh?
-                    window.location.reload();
                 } else {
                     toast.error(result.message);
                 }
@@ -235,11 +251,15 @@ export default function ContractModal({ onClose, firm, trademarks, action, agenc
                     <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
                         <div>
                             <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Kime</label>
-                            <div className="p-2 bg-gray-50 rounded border text-sm">{firm.email}</div>
+                            <div className="p-2 bg-gray-50 rounded border text-sm">{firmEmail || 'E-posta bulunamadı'}</div>
                         </div>
                         <div>
                             <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Konu</label>
-                            <div className="p-2 border rounded text-sm">{mailSubject}</div>
+                            <input
+                                value={mailSubject}
+                                onChange={(e) => setMailSubject(e.target.value)}
+                                className="w-full p-2 border rounded text-sm"
+                            />
                         </div>
 
                         <div className="space-y-1">
@@ -251,17 +271,14 @@ export default function ContractModal({ onClose, firm, trademarks, action, agenc
                         </div>
 
                         <div>
-                            <div>
+                            <div className="mb-4">
                                 <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">İçerik</label>
-                                <div className="p-4 bg-gray-50 border rounded text-sm min-h-[100px] space-y-4 font-sans text-gray-800">
-                                    <div>Merhabalar,</div>
-                                    <div>Hazırlanan sözleşmemiz ekte yer almaktadır. Sözleşme onayı akabinde fatura işlemlerine geçilecektir. Bu maile "<b>tümünü yanıtla</b>" ile geri dönüş yapıp onay vermenizi rica ederiz.</div>
-                                    <div>
-                                        Teşekkürler.<br />
-                                        Saygılarımla
-                                    </div>
-                                    <img src="https://qmotrqehdzebojdowuol.supabase.co/storage/v1/object/public/firm-logos/assets/mail-signature.png" alt="Üstün Patent" style={{ display: 'block', marginTop: '10px', width: '400px', height: 'auto' }} />
-                                </div>
+                                <div
+                                    contentEditable
+                                    ref={editorRef}
+                                    dangerouslySetInnerHTML={{ __html: mailContent }}
+                                    className="p-4 bg-gray-50 border rounded text-sm min-h-[200px] space-y-4 font-sans text-gray-800 focus:outline-blue-500"
+                                />
                             </div>
                             <div className="mt-4">
                                 <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Ekler</label>
@@ -290,7 +307,7 @@ export default function ContractModal({ onClose, firm, trademarks, action, agenc
                 <div className="flex items-center justify-between p-4 border-b">
                     <h3 className="font-semibold text-lg flex items-center gap-2">
                         <LucideFileText className="text-blue-600" />
-                        Sözleşme Oluştur
+                        Marka İzleme Sözleşmesi Oluştur - {trademark.mark_name}
                     </h3>
                     <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full">
                         <LucideX className="w-6 h-6 text-gray-500" />
@@ -300,7 +317,7 @@ export default function ContractModal({ onClose, firm, trademarks, action, agenc
                 <div className="flex-1 flex overflow-hidden">
                     {/* Left: Form */}
                     <div className="w-1/3 border-r overflow-y-auto p-6 space-y-8 bg-[#001a4f]">
-                        {/* 1. Müvekkil Bilgileri */}
+                        {/* 1. Müvekkil Firma Bilgileri */}
                         <section className="space-y-3">
                             <h4 className="font-bold text-white border-b border-gray-700 pb-1">Müvekkil Firma Bilgileri</h4>
                             <div className="grid gap-3">
@@ -326,53 +343,48 @@ export default function ContractModal({ onClose, firm, trademarks, action, agenc
                             <h4 className="font-bold text-white border-b border-gray-700 pb-1">Yapılacak İşlem Bilgileri</h4>
                             <FormInput label="Yapılacak İşlem" value={formData.transactionType} onChange={(v) => handleInputChange('transactionType', v)} />
 
-                            {/* Multi-select for Marks */}
-                            <div>
-                                <label className="block text-xs font-semibold text-white mb-1">Marka (Çoklu Seçim)</label>
-                                <div className="max-h-32 overflow-y-auto border border-gray-300 rounded-md p-2 bg-white grid gap-1">
-                                    {trademarks.length > 0 ? trademarks.map((tm: any) => {
-                                        const label = formatMarkName(tm.name, tm.application_no);
-                                        return (
-                                            <label key={tm.id} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-gray-50 p-1 rounded">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={formData.markName.split(', ').includes(label)}
-                                                    onChange={() => handleMarkToggle(label)}
-                                                    className="rounded text-blue-600 focus:ring-blue-500 h-4 w-4"
-                                                />
-                                                <span className="text-gray-900 font-medium">{label}</span>
-                                            </label>
-                                        );
-                                    }) : <div className="text-gray-400 text-xs text-center py-2">Kayıtlı marka bulunamadı.</div>}
+                            {/* Mark Name with Multi Select */}
+                            <div className="relative">
+                                <label className="block text-xs font-semibold text-white mb-1">Marka Adı (Çoklu Seçim)</label>
+                                <div
+                                    className="w-full text-sm border-gray-300 rounded-md shadow-sm bg-white text-gray-900 px-3 py-2 cursor-pointer min-h-[36px]"
+                                    onClick={() => setIsMarkSelectOpen(!isMarkSelectOpen)}
+                                >
+                                    {formData.markName || 'Marka Seçiniz...'}
                                 </div>
-                                <div className="text-[10px] text-gray-400 mt-1">Seçilen Markalar: {formData.markName}</div>
+                                {isMarkSelectOpen && (
+                                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                                        <div
+                                            className="fixed inset-0 z-0"
+                                            onClick={() => setIsMarkSelectOpen(false)}
+                                        ></div>
+                                        <div className="relative z-10">
+                                            {firmTrademarks.map(t => {
+                                                const label = formatMarkName(t.name, t.application_no);
+                                                return (
+                                                    <div
+                                                        key={t.id}
+                                                        className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer border-b last:border-0"
+                                                        onClick={() => handleMarkToggle(label)}
+                                                    >
+                                                        <div className={`w-4 h-4 border rounded flex items-center justify-center ${selectedMarks.includes(label) ? 'bg-blue-600 border-blue-600 text-white' : 'border-gray-300'}`}>
+                                                            {selectedMarks.includes(label) && <LucideCheck size={12} />}
+                                                        </div>
+                                                        <span className="text-sm text-gray-700">{label}</span>
+                                                    </div>
+                                                );
+                                            })}
+                                            {firmTrademarks.length === 0 && (
+                                                <div className="p-3 text-sm text-gray-500 text-center">Marka bulunamadı.</div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <FormInput label="Marka Tipi" value={formData.markType} onChange={(v) => handleInputChange('markType', v)} />
-
                             <FormInput label="Mal veya Hizmetler" value={formData.goodsServices} onChange={(v) => handleInputChange('goodsServices', v)} multiline />
-
-                            {/* Objection Marks Selection */}
-                            <div>
-                                <label className="block text-xs font-semibold text-white mb-1">İtiraz Edilecek Marka (Listeden Seç)</label>
-                                <div className="space-y-1 mb-2 max-h-[100px] overflow-y-auto border p-2 rounded bg-white">
-                                    {similarMarksOptions.length > 0 ? similarMarksOptions.map((opt, idx) => (
-                                        <label key={idx} className="flex items-center gap-2 text-xs">
-                                            <input
-                                                type="checkbox"
-                                                checked={formData.objectionMarks.includes(opt)}
-                                                onChange={() => handleObjectionMarkToggle(opt)}
-                                                className="rounded text-blue-600"
-                                            />
-                                            {opt}
-                                        </label>
-                                    )) : <span className="text-gray-400 text-xs">Benzer marka bulunamadı.</span>}
-                                </div>
-                                <FormInput label="İtiraz Edilecek Marka (Manuel/Düzenle)" value={formData.objectionMarks} onChange={(v) => handleInputChange('objectionMarks', v)} multiline rows={2} />
-                            </div>
-
                             <FormInput label="Açıklama" value={formData.description} onChange={(v) => handleInputChange('description', v)} multiline />
-                            <FormInput label="Risk Durumu" value={formData.riskStatus} onChange={(v) => handleInputChange('riskStatus', v)} />
                         </section>
 
                         {/* 3. Ücret */}
@@ -406,12 +418,12 @@ export default function ContractModal({ onClose, firm, trademarks, action, agenc
                             <div>
                                 <label className="block text-xs font-semibold text-white mb-1">Danışman</label>
                                 <select
-                                    className="w-full text-sm border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white text-gray-900 px-3"
+                                    className="w-full text-sm border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-white text-gray-900 px-3 py-2"
                                     value={formData.consultatName}
                                     onChange={(e) => handleInputChange('consultatName', e.target.value)}
                                 >
                                     <option value="">Seçiniz</option>
-                                    {agencySettings.consultants.map((c: any) => <option key={c.id} value={c.name}>{c.name}</option>)}
+                                    {agencySettings?.consultants?.map((c: any) => <option key={c.id} value={c.name}>{c.name}</option>)}
                                 </select>
                             </div>
                         </section>
@@ -448,7 +460,6 @@ export default function ContractModal({ onClose, firm, trademarks, action, agenc
     );
 }
 
-// Helper Component
 interface FormInputProps {
     label: string;
     value: string | number;

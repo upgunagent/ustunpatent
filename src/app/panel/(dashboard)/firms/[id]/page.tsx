@@ -7,6 +7,8 @@ import { getAgencySettings } from "@/actions/settings";
 
 export const dynamic = 'force-dynamic';
 
+import DeleteFirmButton from "@/components/firms/DeleteFirmButton";
+
 export default async function FirmDetailsPage(props: { params: Promise<{ id: string }> }) {
     const params = await props.params;
 
@@ -15,46 +17,40 @@ export default async function FirmDetailsPage(props: { params: Promise<{ id: str
     }
 
     const supabase = await createClient();
+    const { data: firm } = await supabase
+        .from('firms')
+        .select('*')
+        .eq('id', params.id)
+        .single();
 
-    // 1. Fetch Firm Data & Trademarks Parallel
-    const [firmParams, settings] = await Promise.all([
-        supabase.from("firms").select("*").eq("id", params.id).single(),
-        getAgencySettings()
-    ]);
-
-    const { data: firm, error: firmError } = firmParams;
-
-    if (firmError || !firm) {
-        console.error("Error fetching firm:", firmError);
-        return <div>Firma bulunamadı veya bir hata oluştu.</div>;
+    if (!firm) {
+        return notFound();
     }
 
-    // Fetch Trademarks
-    const { data: trademarks, error: trademarksError } = await supabase
-        .from("firm_trademarks")
-        .select("*")
-        .eq("firm_id", params.id)
-        .order("created_at", { ascending: false });
+    // Trademarks
+    const { data: trademarks } = await supabase
+        .from('firm_trademarks')
+        .select('*')
+        .eq('firm_id', firm.id)
+        .order('created_at', { ascending: false });
 
-    if (trademarksError) {
-        console.error("Error fetching trademarks:", trademarksError);
-    }
+    // Agency Settings for consultants
+    const agencySettings = await getAgencySettings();
 
     return (
         <div className="space-y-6">
-            <Link
-                href="/panel/firms"
-                className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-[#001a4f] transition-colors"
-            >
-                <LucideArrowLeft size={16} />
-                Firmalar Listesine Dön
-            </Link>
+            <div className="flex items-center justify-between">
+                <Link
+                    href="/panel/firms"
+                    className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900"
+                >
+                    <LucideArrowLeft size={16} />
+                    Firmalar Listesine Dön
+                </Link>
+                <DeleteFirmButton firmId={firm.id} />
+            </div>
 
-            <FirmDetails
-                firm={firm}
-                trademarks={trademarks || []}
-                agencySettings={settings}
-            />
+            <FirmDetails firm={firm} trademarks={trademarks || []} agencySettings={agencySettings} />
         </div>
     );
 }

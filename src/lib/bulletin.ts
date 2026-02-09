@@ -3,7 +3,7 @@ import { SupabaseClient } from '@supabase/supabase-js';
 
 // Supabase'den pagination ile tüm bülten numaralarını çeker
 export async function getAllBulletinIssues(supabase: SupabaseClient) {
-    let allIssues: number[] = [];
+    const allIssues: number[] = [];
     let hasMore = true;
     let page = 0;
     const pageSize = 1000; // API limit is likely 1000 rows

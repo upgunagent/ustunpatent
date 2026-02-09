@@ -157,7 +157,7 @@ export const generateContractPDF = async (data: ContractData) => {
         [
             { content: 'TC Kimlik No', styles: { fontStyle: 'bold' } },
             { content: data.clientTC || '-' },
-            { content: 'Doğum Yeri ve Tarihi', styles: { fontStyle: 'bold' } },
+            { content: 'Doğum Tarihi', styles: { fontStyle: 'bold' } },
             { content: data.clientBornDate || '-' }
         ],
         [
@@ -165,10 +165,6 @@ export const generateContractPDF = async (data: ContractData) => {
             { content: data.clientPhone || '-' },
             { content: 'E-Posta', styles: { fontStyle: 'bold' } },
             { content: data.clientEmail || '-' }
-        ],
-        [
-            { content: 'Web Adresi', styles: { fontStyle: 'bold' } },
-            { content: data.clientWeb || '-', colSpan: 3 }
         ],
         [
             { content: 'Vergi Dairesi', styles: { fontStyle: 'bold' } },
@@ -211,24 +207,35 @@ export const generateContractPDF = async (data: ContractData) => {
         [
             { content: 'Marka Tipi', styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } },
             { content: data.markType || '' }
-        ],
+        ]
+    ];
+
+    // Conditionally add Objection Marks
+    if (formattedObjectionMarks) {
+        transactionBody.push([
+            { content: 'İtiraz Edilecek Marka Adı/No', styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } } as any,
+            { content: formattedObjectionMarks }
+        ]);
+    }
+
+    transactionBody.push(
         [
-            { content: 'İtiraz Edilecek Marka Adı/No', styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } },
-            { content: formattedObjectionMarks || ' ' }
-        ],
-        [
-            { content: 'Mal veya Hizmetler', styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            { content: 'Mal veya Hizmetler', styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } } as any,
             { content: data.goodsServices || ' ' }
         ],
         [
-            { content: 'Açıklama', styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } },
+            { content: 'Açıklama', styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } } as any,
             { content: data.description || ' ' }
-        ],
-        [
-            { content: 'Risk Durumu', styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } },
-            { content: data.riskStatus || ' ' }
         ]
-    ];
+    );
+
+    // Conditionally add Risk Status
+    if (data.riskStatus) {
+        transactionBody.push([
+            { content: 'Risk Durumu', styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } } as any,
+            { content: data.riskStatus }
+        ]);
+    }
 
     currentY = safeAutoTable({
         startY: currentY,
