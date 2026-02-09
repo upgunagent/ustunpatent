@@ -562,6 +562,13 @@ export default function FirmDetails({ firm, trademarks, agencySettings }: { firm
                                     <div className="text-gray-900">{previewAction.metadata?.sent_to}</div>
                                 </div>
 
+                                {previewAction.metadata?.cc && previewAction.metadata.cc.length > 0 && (
+                                    <div>
+                                        <label className="text-xs font-semibold text-gray-500 uppercase">Bilgi (CC)</label>
+                                        <div className="text-gray-900 text-sm">{Array.isArray(previewAction.metadata.cc) ? previewAction.metadata.cc.join(', ') : previewAction.metadata.cc}</div>
+                                    </div>
+                                )}
+
                                 <div>
                                     <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">İçerik</label>
                                     <div
