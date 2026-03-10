@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
-import { LucidePlus, LucideX, LucideSave } from 'lucide-react';
-import { addTrademark, updateTrademark } from '@/actions/firms';
+import { useState, useEffect } from 'react';
+import { LucidePlus, LucideX, LucideSave, LucideUsers } from 'lucide-react';
+import { addTrademark, updateTrademark, getTrademarkContacts } from '@/actions/firms';
 import { useFormStatus } from 'react-dom';
 
 function SubmitButton({ isEditing }: { isEditing: boolean }) {
@@ -23,11 +23,13 @@ interface TrademarkFormProps {
     firmId: string;
     onClose: () => void;
     initialData?: any; // If provided, we are in edit mode
+    firmContacts?: any[]; // Available contacts for the firm
 }
 
-export default function TrademarkForm({ firmId, onClose, initialData }: TrademarkFormProps) {
+export default function TrademarkForm({ firmId, onClose, initialData, firmContacts = [] }: TrademarkFormProps) {
     const isEditing = !!initialData;
     const [logoPreview, setLogoPreview] = useState<string | null>(initialData?.logo_url || null);
+    const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
 
     // Parse existing classes if any
     const initialClasses = initialData?.classes
@@ -72,10 +74,36 @@ export default function TrademarkForm({ firmId, onClose, initialData }: Trademar
         }
     };
 
+    // Load existing contact assignments for editing
+    useEffect(() => {
+        if (isEditing && initialData?.id) {
+            getTrademarkContacts(initialData.id).then(contacts => {
+                setSelectedContactIds(contacts.map((c: any) => c.id));
+            });
+        }
+    }, [isEditing, initialData?.id]);
+
+    const toggleContact = (contactId: string) => {
+        setSelectedContactIds(prev =>
+            prev.includes(contactId)
+                ? prev.filter(id => id !== contactId)
+                : [...prev, contactId]
+        );
+    };
+
+    // Build rights_owner from selected contacts
+    const selectedContactNames = firmContacts
+        .filter(c => selectedContactIds.includes(c.id))
+        .map(c => c.full_name);
+
     const handleSubmit = async (formData: FormData) => {
         formData.append('firm_id', firmId);
         formData.append('classes', selectedClasses.join(','));
         formData.append('search_keywords', searchKeywords.join(','));
+        formData.append('contact_ids', JSON.stringify(selectedContactIds));
+
+        // Set rights_owner from selected contacts
+        formData.set('rights_owner', selectedContactNames.join(' - '));
 
         // If editing, append ID and existing logo URL (as fallback if no new file)
         if (isEditing) {
@@ -203,14 +231,50 @@ export default function TrademarkForm({ firmId, onClose, initialData }: Trademar
                             )}
                         </div>
 
-                        <div className="grid gap-2">
-                            <label className="text-sm font-medium text-gray-700">Hak Sahibi</label>
-                            <input
-                                name="rights_owner"
-                                type="text"
-                                defaultValue={initialData?.rights_owner}
-                                className="flex h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#001a4f] focus:border-transparent"
-                            />
+                        {/* Marka Yetkilileri (Çoklu Seçim) */}
+                        <div className="md:col-span-2">
+                            <label className="text-sm font-medium text-gray-700 flex items-center gap-2 mb-2">
+                                <LucideUsers size={16} className="text-[#001a4f]" />
+                                Marka Yetkilileri (Hak Sahipleri)
+                                {selectedContactIds.length > 0 && (
+                                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                                        {selectedContactIds.length} seçili
+                                    </span>
+                                )}
+                            </label>
+                            {firmContacts.length > 0 ? (
+                                <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 space-y-2">
+                                    {firmContacts.map((contact) => (
+                                        <label
+                                            key={contact.id}
+                                            className={`flex items-center gap-3 p-2.5 rounded-md cursor-pointer transition-colors ${selectedContactIds.includes(contact.id)
+                                                ? 'bg-blue-50 border border-blue-200'
+                                                : 'hover:bg-white border border-transparent'
+                                                }`}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedContactIds.includes(contact.id)}
+                                                onChange={() => toggleContact(contact.id)}
+                                                className="w-4 h-4 rounded border-gray-300 text-[#001a4f] focus:ring-[#001a4f]"
+                                            />
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-sm font-medium text-gray-900">{contact.full_name}</div>
+                                                <div className="text-xs text-gray-500 flex items-center gap-3">
+                                                    {contact.tpmk_owner_no && <span>Sahip No: {contact.tpmk_owner_no}</span>}
+                                                    {contact.tc_no && <span>TC: {contact.tc_no}</span>}
+                                                </div>
+                                            </div>
+                                        </label>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-sm text-gray-400 bg-gray-50 rounded-lg p-4 text-center border border-dashed border-gray-200">
+                                    Bu firmaya henüz yetkili kişi tanımlanmamış. Önce firma detaylarından yetkili kişi ekleyin.
+                                </div>
+                            )}
+                            {/* Hidden field to preserve Hak Sahibi for backward compat */}
+                            <input type="hidden" name="rights_owner" value={selectedContactNames.join(' - ') || initialData?.rights_owner || ''} />
                         </div>
 
                         <div className="grid gap-2">

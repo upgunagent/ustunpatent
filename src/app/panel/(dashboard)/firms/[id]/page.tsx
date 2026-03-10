@@ -34,6 +34,13 @@ export default async function FirmDetailsPage(props: { params: Promise<{ id: str
         .eq('firm_id', firm.id)
         .order('created_at', { ascending: false });
 
+    // Firm Contacts (Yetkili Kişiler)
+    const { data: firmContacts } = await supabase
+        .from('firm_contacts')
+        .select('*')
+        .eq('firm_id', firm.id)
+        .order('created_at', { ascending: true });
+
     // Agency Settings for consultants
     const agencySettings = await getAgencySettings();
 
@@ -50,7 +57,12 @@ export default async function FirmDetailsPage(props: { params: Promise<{ id: str
                 <DeleteFirmButton firmId={firm.id} />
             </div>
 
-            <FirmDetails firm={firm} trademarks={trademarks || []} agencySettings={agencySettings} />
+            <FirmDetails
+                firm={firm}
+                trademarks={trademarks || []}
+                agencySettings={agencySettings}
+                firmContacts={firmContacts || []}
+            />
         </div>
     );
 }

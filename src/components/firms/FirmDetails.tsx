@@ -4,12 +4,13 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import ContractModal from './ContractModal';
 import TrademarkForm from './TrademarkForm';
-import { LucideBuilding2, LucideUser, LucidePlus, LucideExternalLink, LucidePhone, LucideMail, LucideGlobe, LucideShieldCheck, LucideFileText } from 'lucide-react';
+import { LucideBuilding2, LucideUser, LucidePlus, LucideExternalLink, LucidePhone, LucideMail, LucideGlobe, LucideShieldCheck, LucideFileText, LucideUsers, LucideTrash2, LucidePencil, LucideCheck, LucideX as LucideXIcon } from 'lucide-react';
 import EditableField from '../ui/editable-field';
 import { SECTORS } from '@/constants/sectors';
 import { getFirmHistory, updateActionStatus } from '@/actions/history';
+import { addFirmContact, updateFirmContact, deleteFirmContact, type ContactData } from '@/actions/firms';
 import { toast } from 'sonner';
-import { LucideHistory, LucideCheckCircle, LucideXCircle, LucideClock, LucideEye, LucideTrash2 } from 'lucide-react';
+import { LucideHistory, LucideCheckCircle, LucideXCircle, LucideClock, LucideEye } from 'lucide-react';
 
 // Helper to format dates
 const formatDate = (dateString?: string) => {
@@ -18,11 +19,21 @@ const formatDate = (dateString?: string) => {
 };
 
 
-export default function FirmDetails({ firm, trademarks, agencySettings }: { firm: any, trademarks: any[], agencySettings?: any }) {
+export default function FirmDetails({ firm, trademarks, agencySettings, firmContacts: initialContacts }: { firm: any, trademarks: any[], agencySettings?: any, firmContacts?: any[] }) {
     const [isTrademarkModalOpen, setIsTrademarkModalOpen] = useState(false);
     const [isContractModalOpen, setIsContractModalOpen] = useState(false);
     const [contractAction, setContractAction] = useState<any>(null);
     const [editingTrademark, setEditingTrademark] = useState<any>(null);
+    const [firmContacts, setFirmContacts] = useState<any[]>(initialContacts || []);
+
+    // Contact editing state
+    const [editingContactId, setEditingContactId] = useState<string | null>(null);
+    const [editContactData, setEditContactData] = useState<any>(null);
+    const [isAddingContact, setIsAddingContact] = useState(false);
+    const [newContact, setNewContact] = useState<ContactData>({
+        full_name: '', tc_no: '', tpmk_owner_no: '', phones: [''], emails: [''],
+    });
+
     const handleDeleteAction = async (actionId: string) => {
         if (!confirm('Bu işlemi silmek istediğinize emin misiniz?')) return;
 
@@ -66,6 +77,62 @@ export default function FirmDetails({ firm, trademarks, agencySettings }: { firm
             toast.error('Durum güncellenemedi');
         }
     };
+
+    // Contact CRUD handlers
+    const handleAddContact = async () => {
+        if (!newContact.full_name.trim()) {
+            toast.error('Yetkili adı soyadı zorunludur.');
+            return;
+        }
+        const result = await addFirmContact(firm.id, newContact);
+        if (result.success) {
+            toast.success('Yetkili eklendi.');
+            setFirmContacts(prev => [...prev, result.data]);
+            setIsAddingContact(false);
+            setNewContact({ full_name: '', tc_no: '', tpmk_owner_no: '', phones: [''], emails: [''] });
+        } else {
+            toast.error(result.message || 'Yetkili eklenirken hata oluştu.');
+        }
+    };
+
+    const handleSaveEditContact = async () => {
+        if (!editContactData || !editingContactId) return;
+        const result = await updateFirmContact(editingContactId, firm.id, editContactData);
+        if (result.success) {
+            toast.success('Yetkili güncellendi.');
+            setFirmContacts(prev => prev.map(c => c.id === editingContactId ? { ...c, ...editContactData } : c));
+            setEditingContactId(null);
+            setEditContactData(null);
+        } else {
+            toast.error(result.message || 'Yetkili güncellenirken hata oluştu.');
+        }
+    };
+
+    const handleDeleteContact = async (contactId: string) => {
+        if (!confirm('Bu yetkiliyi silmek istediğinize emin misiniz?')) return;
+        const result = await deleteFirmContact(contactId, firm.id);
+        if (result.success) {
+            toast.success(result.message);
+            setFirmContacts(prev => prev.filter(c => c.id !== contactId));
+        } else {
+            toast.error(result.message || 'Yetkili silinemedi.');
+        }
+    };
+
+    const startEditContact = (contact: any) => {
+        setEditingContactId(contact.id);
+        setEditContactData({
+            full_name: contact.full_name || '',
+            tc_no: contact.tc_no || '',
+            tpmk_owner_no: contact.tpmk_owner_no || '',
+            phones: contact.phones?.length > 0 ? [...contact.phones] : [''],
+            emails: contact.emails?.length > 0 ? [...contact.emails] : [''],
+        });
+    };
+
+    // Collect all phones and emails from contacts for the header
+    const allPhones = firmContacts.flatMap(c => c.phones || []).filter(Boolean);
+    const allEmails = firmContacts.flatMap(c => c.emails || []).filter(Boolean);
 
     const getStatusBadge = (status: string, id: string) => {
         const styles: Record<string, string> = {
@@ -126,14 +193,32 @@ export default function FirmDetails({ firm, trademarks, agencySettings }: { firm
                         <LucidePhone className="text-white/60 mt-1" size={20} />
                         <div>
                             <p className="text-xs text-white/50 uppercase tracking-wider font-semibold">Telefon</p>
-                            <p className="font-medium">{firm.phone || '-'}</p>
+                            {allPhones.length > 0 ? (
+                                <div className="space-y-0.5">
+                                    {allPhones.slice(0, 2).map((p, i) => (
+                                        <p key={i} className="font-medium">{p}</p>
+                                    ))}
+                                    {allPhones.length > 2 && (
+                                        <p className="text-xs text-white/50">+{allPhones.length - 2} daha</p>
+                                    )}
+                                </div>
+                            ) : <p className="font-medium">{firm.phone || '-'}</p>}
                         </div>
                     </div>
                     <div className="flex items-start gap-3">
                         <LucideMail className="text-white/60 mt-1" size={20} />
                         <div>
                             <p className="text-xs text-white/50 uppercase tracking-wider font-semibold">E-posta</p>
-                            <p className="font-medium">{firm.email || '-'}</p>
+                            {allEmails.length > 0 ? (
+                                <div className="space-y-0.5">
+                                    {allEmails.slice(0, 2).map((e, i) => (
+                                        <p key={i} className="font-medium text-sm">{e}</p>
+                                    ))}
+                                    {allEmails.length > 2 && (
+                                        <p className="text-xs text-white/50">+{allEmails.length - 2} daha</p>
+                                    )}
+                                </div>
+                            ) : <p className="font-medium">{firm.email || '-'}</p>}
                         </div>
                     </div>
                     <div className="flex items-start gap-3">
@@ -149,7 +234,7 @@ export default function FirmDetails({ firm, trademarks, agencySettings }: { firm
                         </div>
                     </div>
                     <div className="flex items-start gap-3">
-                        <LucideUser className="text-white/60 mt-1" size={20} />
+                        <LucideUsers className="text-white/60 mt-1" size={20} />
                         <div>
                             <p className="text-xs text-white/50 uppercase tracking-wider font-semibold">Müşteri Temsilcisi</p>
                             <p className="font-medium">{firm.representative || '-'}</p>
@@ -162,6 +247,7 @@ export default function FirmDetails({ firm, trademarks, agencySettings }: { firm
             <div className="grid gap-8 lg:grid-cols-3">
                 {/* Sol Kolon: Firma Detay Kartı */}
                 <div className="lg:col-span-1 space-y-6">
+                    {/* Resmi Bilgiler */}
                     <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
                         <h3 className="font-semibold text-gray-900 border-b pb-3 mb-4">Resmi Bilgiler</h3>
                         <div className="space-y-4">
@@ -197,16 +283,6 @@ export default function FirmDetails({ firm, trademarks, agencySettings }: { firm
 
                             <hr className="my-2" />
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <EditableField firmId={firm.id} field="authority_name" value={firm.authority_name} label="Yetki İsmi" />
-                                <EditableField firmId={firm.id} field="tpmk_owner_no" value={firm.tpmk_owner_no} label="TPMK Sahip No" />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <EditableField firmId={firm.id} field="phone" value={firm.phone} label="Telefon" />
-                                <EditableField firmId={firm.id} field="email" value={firm.email} label="E-posta" />
-                            </div>
-
                             <div>
                                 <EditableField firmId={firm.id} field="website" value={firm.website} label="Web Sitesi" />
                             </div>
@@ -219,6 +295,217 @@ export default function FirmDetails({ firm, trademarks, agencySettings }: { firm
                                     options={agencySettings?.consultants?.map((c: any) => c.name)}
                                 />
                             </div>
+                        </div>
+                    </div>
+
+                    {/* Yetkili Kişiler Kartı */}
+                    <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                        <div className="flex items-center justify-between border-b pb-3 mb-4">
+                            <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                                <LucideUsers size={18} className="text-[#001a4f]" />
+                                Yetkili Kişiler
+                                <span className="text-xs font-normal text-gray-400">({firmContacts.length})</span>
+                            </h3>
+                            <button
+                                onClick={() => setIsAddingContact(true)}
+                                className="flex items-center gap-1 text-xs font-medium text-green-600 hover:text-green-800 hover:bg-green-50 px-2 py-1 rounded transition-colors"
+                            >
+                                <LucidePlus size={14} />
+                                Ekle
+                            </button>
+                        </div>
+
+                        <div className="space-y-3">
+                            {/* Add Contact Form */}
+                            {isAddingContact && (
+                                <div className="border border-green-200 rounded-lg p-4 bg-green-50/50 space-y-3">
+                                    <input
+                                        type="text"
+                                        placeholder="Ad Soyad *"
+                                        value={newContact.full_name}
+                                        onChange={e => setNewContact(p => ({ ...p, full_name: e.target.value }))}
+                                        className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-[#001a4f] focus:outline-none"
+                                    />
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <input
+                                            type="text"
+                                            placeholder="TC No"
+                                            maxLength={11}
+                                            value={newContact.tc_no}
+                                            onChange={e => setNewContact(p => ({ ...p, tc_no: e.target.value }))}
+                                            className="text-sm border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-[#001a4f] focus:outline-none"
+                                        />
+                                        <input
+                                            type="text"
+                                            placeholder="Marka Sahip No"
+                                            value={newContact.tpmk_owner_no}
+                                            onChange={e => setNewContact(p => ({ ...p, tpmk_owner_no: e.target.value }))}
+                                            className="text-sm border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-[#001a4f] focus:outline-none"
+                                        />
+                                    </div>
+                                    {/* Phones */}
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-medium text-gray-500">Telefonlar</label>
+                                        {newContact.phones.map((p, i) => (
+                                            <div key={i} className="flex gap-1">
+                                                <input
+                                                    type="tel"
+                                                    placeholder="5XX XXX XX XX"
+                                                    value={p}
+                                                    onChange={e => {
+                                                        const phones = [...newContact.phones];
+                                                        phones[i] = e.target.value;
+                                                        setNewContact(prev => ({ ...prev, phones }));
+                                                    }}
+                                                    className="flex-1 text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:ring-2 focus:ring-[#001a4f] focus:outline-none"
+                                                />
+                                                {newContact.phones.length > 1 && (
+                                                    <button type="button" onClick={() => setNewContact(prev => ({ ...prev, phones: prev.phones.filter((_, pi) => pi !== i) }))}
+                                                        className="text-red-400 hover:text-red-600 p-1"><LucideTrash2 size={14} /></button>
+                                                )}
+                                            </div>
+                                        ))}
+                                        <button type="button" onClick={() => setNewContact(prev => ({ ...prev, phones: [...prev.phones, ''] }))}
+                                            className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"><LucidePlus size={12} /> Telefon Ekle</button>
+                                    </div>
+                                    {/* Emails */}
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-medium text-gray-500">E-postalar</label>
+                                        {newContact.emails.map((em, i) => (
+                                            <div key={i} className="flex gap-1">
+                                                <input
+                                                    type="email"
+                                                    placeholder="ornek@sirket.com"
+                                                    value={em}
+                                                    onChange={e => {
+                                                        const emails = [...newContact.emails];
+                                                        emails[i] = e.target.value;
+                                                        setNewContact(prev => ({ ...prev, emails }));
+                                                    }}
+                                                    className="flex-1 text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:ring-2 focus:ring-[#001a4f] focus:outline-none"
+                                                />
+                                                {newContact.emails.length > 1 && (
+                                                    <button type="button" onClick={() => setNewContact(prev => ({ ...prev, emails: prev.emails.filter((_, ei) => ei !== i) }))}
+                                                        className="text-red-400 hover:text-red-600 p-1"><LucideTrash2 size={14} /></button>
+                                                )}
+                                            </div>
+                                        ))}
+                                        <button type="button" onClick={() => setNewContact(prev => ({ ...prev, emails: [...prev.emails, ''] }))}
+                                            className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"><LucidePlus size={12} /> E-posta Ekle</button>
+                                    </div>
+                                    <div className="flex justify-end gap-2 pt-2">
+                                        <button onClick={() => { setIsAddingContact(false); setNewContact({ full_name: '', tc_no: '', tpmk_owner_no: '', phones: [''], emails: [''] }); }}
+                                            className="text-xs text-gray-500 hover:text-gray-700 px-3 py-1.5 rounded border border-gray-300 hover:bg-gray-50">İptal</button>
+                                        <button onClick={handleAddContact}
+                                            className="text-xs text-white bg-green-600 hover:bg-green-700 px-3 py-1.5 rounded font-medium">Kaydet</button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Contact Cards */}
+                            {firmContacts.map((contact) => (
+                                <div key={contact.id} className="border border-gray-100 rounded-lg p-3 hover:border-gray-300 transition-colors group">
+                                    {editingContactId === contact.id && editContactData ? (
+                                        /* Edit Mode */
+                                        <div className="space-y-2">
+                                            <input type="text" value={editContactData.full_name}
+                                                onChange={e => setEditContactData((p: any) => ({ ...p, full_name: e.target.value }))}
+                                                className="w-full text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:ring-2 focus:ring-[#001a4f] focus:outline-none font-medium" />
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <input type="text" value={editContactData.tc_no} placeholder="TC No" maxLength={11}
+                                                    onChange={e => setEditContactData((p: any) => ({ ...p, tc_no: e.target.value }))}
+                                                    className="text-xs border border-gray-300 rounded-md px-2 py-1.5 focus:ring-2 focus:ring-[#001a4f] focus:outline-none" />
+                                                <input type="text" value={editContactData.tpmk_owner_no} placeholder="Sahip No"
+                                                    onChange={e => setEditContactData((p: any) => ({ ...p, tpmk_owner_no: e.target.value }))}
+                                                    className="text-xs border border-gray-300 rounded-md px-2 py-1.5 focus:ring-2 focus:ring-[#001a4f] focus:outline-none" />
+                                            </div>
+                                            {/* Edit Phones */}
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] font-medium text-gray-500 uppercase">Telefonlar</label>
+                                                {editContactData.phones.map((p: string, i: number) => (
+                                                    <div key={i} className="flex gap-1">
+                                                        <input type="tel" value={p}
+                                                            onChange={e => {
+                                                                const phones = [...editContactData.phones];
+                                                                phones[i] = e.target.value;
+                                                                setEditContactData((prev: any) => ({ ...prev, phones }));
+                                                            }}
+                                                            className="flex-1 text-xs border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-[#001a4f] focus:outline-none" />
+                                                        {editContactData.phones.length > 1 && (
+                                                            <button type="button" onClick={() => setEditContactData((prev: any) => ({ ...prev, phones: prev.phones.filter((_: any, pi: number) => pi !== i) }))}
+                                                                className="text-red-400 hover:text-red-600 p-0.5"><LucideTrash2 size={12} /></button>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                                <button type="button" onClick={() => setEditContactData((prev: any) => ({ ...prev, phones: [...prev.phones, ''] }))}
+                                                    className="text-[10px] text-blue-600 font-medium flex items-center gap-0.5"><LucidePlus size={10} /> Telefon</button>
+                                            </div>
+                                            {/* Edit Emails */}
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] font-medium text-gray-500 uppercase">E-postalar</label>
+                                                {editContactData.emails.map((em: string, i: number) => (
+                                                    <div key={i} className="flex gap-1">
+                                                        <input type="email" value={em}
+                                                            onChange={e => {
+                                                                const emails = [...editContactData.emails];
+                                                                emails[i] = e.target.value;
+                                                                setEditContactData((prev: any) => ({ ...prev, emails }));
+                                                            }}
+                                                            className="flex-1 text-xs border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-[#001a4f] focus:outline-none" />
+                                                        {editContactData.emails.length > 1 && (
+                                                            <button type="button" onClick={() => setEditContactData((prev: any) => ({ ...prev, emails: prev.emails.filter((_: any, ei: number) => ei !== i) }))}
+                                                                className="text-red-400 hover:text-red-600 p-0.5"><LucideTrash2 size={12} /></button>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                                <button type="button" onClick={() => setEditContactData((prev: any) => ({ ...prev, emails: [...prev.emails, ''] }))}
+                                                    className="text-[10px] text-blue-600 font-medium flex items-center gap-0.5"><LucidePlus size={10} /> E-posta</button>
+                                            </div>
+                                            <div className="flex justify-end gap-1.5 pt-1">
+                                                <button onClick={() => { setEditingContactId(null); setEditContactData(null); }}
+                                                    className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"><LucideXIcon size={14} /></button>
+                                                <button onClick={handleSaveEditContact}
+                                                    className="p-1.5 text-green-600 hover:text-green-800 hover:bg-green-50 rounded"><LucideCheck size={14} /></button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        /* View Mode */
+                                        <div>
+                                            <div className="flex items-center justify-between mb-1">
+                                                <span className="font-medium text-sm text-gray-900">{contact.full_name}</span>
+                                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button onClick={() => startEditContact(contact)}
+                                                        className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"><LucidePencil size={13} /></button>
+                                                    <button onClick={() => handleDeleteContact(contact.id)}
+                                                        className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"><LucideTrash2 size={13} /></button>
+                                                </div>
+                                            </div>
+                                            <div className="text-xs text-gray-500 space-y-0.5">
+                                                {contact.tc_no && <div>TC: {contact.tc_no}</div>}
+                                                {contact.tpmk_owner_no && <div>Sahip No: {contact.tpmk_owner_no}</div>}
+                                                {contact.phones?.filter(Boolean).length > 0 && (
+                                                    <div className="flex items-center gap-1">
+                                                        <LucidePhone size={11} />
+                                                        {contact.phones.filter(Boolean).join(', ')}
+                                                    </div>
+                                                )}
+                                                {contact.emails?.filter(Boolean).length > 0 && (
+                                                    <div className="flex items-center gap-1">
+                                                        <LucideMail size={11} />
+                                                        {contact.emails.filter(Boolean).join(', ')}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+
+                            {firmContacts.length === 0 && !isAddingContact && (
+                                <p className="text-xs text-gray-400 text-center py-4">
+                                    Henüz yetkili kişi eklenmemiş.
+                                </p>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -517,6 +804,7 @@ export default function FirmDetails({ firm, trademarks, agencySettings }: { firm
                             setEditingTrademark(null);
                         }}
                         initialData={editingTrademark}
+                        firmContacts={firmContacts}
                     />
                 )
             }

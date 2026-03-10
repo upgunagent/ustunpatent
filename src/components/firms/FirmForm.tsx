@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { LucideBuilding2, LucideUser, LucideSave, LucideArrowLeft } from 'lucide-react';
+import { LucideBuilding2, LucideUser, LucideSave, LucidePlus, LucideTrash2, LucidePhone, LucideMail } from 'lucide-react';
 import { createFirm } from '@/actions/firms';
 import Link from 'next/link';
 import { useFormStatus } from 'react-dom';
@@ -21,11 +21,91 @@ function SubmitButton() {
     );
 }
 
+interface ContactEntry {
+    full_name: string;
+    tc_no: string;
+    tpmk_owner_no: string;
+    phones: string[];
+    emails: string[];
+}
+
+const emptyContact = (): ContactEntry => ({
+    full_name: '',
+    tc_no: '',
+    tpmk_owner_no: '',
+    phones: [''],
+    emails: [''],
+});
+
 export default function FirmForm({ consultants }: { consultants: any[] }) {
     const [type, setType] = useState<'individual' | 'corporate'>('corporate');
+    const [contacts, setContacts] = useState<ContactEntry[]>([emptyContact()]);
+
+    const addContact = () => {
+        setContacts(prev => [...prev, emptyContact()]);
+    };
+
+    const removeContact = (index: number) => {
+        if (contacts.length <= 1) return;
+        setContacts(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const updateContact = (index: number, field: keyof ContactEntry, value: any) => {
+        setContacts(prev => prev.map((c, i) => i === index ? { ...c, [field]: value } : c));
+    };
+
+    const addPhone = (contactIndex: number) => {
+        setContacts(prev => prev.map((c, i) =>
+            i === contactIndex ? { ...c, phones: [...c.phones, ''] } : c
+        ));
+    };
+
+    const removePhone = (contactIndex: number, phoneIndex: number) => {
+        setContacts(prev => prev.map((c, i) =>
+            i === contactIndex ? { ...c, phones: c.phones.filter((_, pi) => pi !== phoneIndex) } : c
+        ));
+    };
+
+    const updatePhone = (contactIndex: number, phoneIndex: number, value: string) => {
+        setContacts(prev => prev.map((c, i) =>
+            i === contactIndex ? { ...c, phones: c.phones.map((p, pi) => pi === phoneIndex ? value : p) } : c
+        ));
+    };
+
+    const addEmail = (contactIndex: number) => {
+        setContacts(prev => prev.map((c, i) =>
+            i === contactIndex ? { ...c, emails: [...c.emails, ''] } : c
+        ));
+    };
+
+    const removeEmail = (contactIndex: number, emailIndex: number) => {
+        setContacts(prev => prev.map((c, i) =>
+            i === contactIndex ? { ...c, emails: c.emails.filter((_, ei) => ei !== emailIndex) } : c
+        ));
+    };
+
+    const updateEmail = (contactIndex: number, emailIndex: number, value: string) => {
+        setContacts(prev => prev.map((c, i) =>
+            i === contactIndex ? { ...c, emails: c.emails.map((e, ei) => ei === emailIndex ? value : e) } : c
+        ));
+    };
+
+    const handleSubmit = async (formData: FormData) => {
+        // Inject contacts JSON into form data
+        formData.append('contacts', JSON.stringify(contacts));
+
+        // Set individual name from first contact if individual type
+        if (type === 'individual' && !formData.get('individual_name_surname')) {
+            formData.set('individual_name_surname', contacts[0]?.full_name || '');
+        }
+
+        await createFirm(formData);
+    };
+
+    const inputClass = "flex h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#001a4f] focus:border-transparent";
 
     return (
-        <form action={createFirm} className="space-y-8">
+        <form action={handleSubmit} className="space-y-8">
             <input type="hidden" name="type" value={type} />
 
             {/* Header / Type Selection */}
@@ -61,29 +141,170 @@ export default function FirmForm({ consultants }: { consultants: any[] }) {
                 </div>
             </div>
 
+            {/* Yetkili Kişiler Bölümü */}
+            <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-gray-900">
+                        Yetkili Kişiler
+                        <span className="ml-2 text-sm font-normal text-gray-500">({contacts.length} kişi)</span>
+                    </h3>
+                    <button
+                        type="button"
+                        onClick={addContact}
+                        className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 transition-colors"
+                    >
+                        <LucidePlus size={16} />
+                        Yetkili Ekle
+                    </button>
+                </div>
+
+                {contacts.map((contact, cIdx) => (
+                    <div key={cIdx} className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm space-y-4 relative">
+                        <div className="flex items-center justify-between mb-2">
+                            <h4 className="text-sm font-semibold text-[#001a4f]">
+                                {cIdx + 1}. Yetkili Kişi
+                            </h4>
+                            {contacts.length > 1 && (
+                                <button
+                                    type="button"
+                                    onClick={() => removeContact(cIdx)}
+                                    className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded transition-colors"
+                                >
+                                    <LucideTrash2 size={14} />
+                                    Kaldır
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Row 1: Ad Soyad, TC No, Marka Sahip No */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="grid gap-1.5">
+                                <label className="text-sm font-medium text-gray-700">
+                                    Yetkili Adı Soyadı <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={contact.full_name}
+                                    onChange={(e) => updateContact(cIdx, 'full_name', e.target.value)}
+                                    placeholder="Ad Soyad"
+                                    className={inputClass}
+                                />
+                            </div>
+                            <div className="grid gap-1.5">
+                                <label className="text-sm font-medium text-gray-700">TC Kimlik No</label>
+                                <input
+                                    type="text"
+                                    maxLength={11}
+                                    value={contact.tc_no}
+                                    onChange={(e) => updateContact(cIdx, 'tc_no', e.target.value)}
+                                    placeholder="XXXXXXXXXXX"
+                                    className={inputClass}
+                                />
+                            </div>
+                            <div className="grid gap-1.5">
+                                <label className="text-sm font-medium text-gray-700">Marka Sahip No</label>
+                                <input
+                                    type="text"
+                                    value={contact.tpmk_owner_no}
+                                    onChange={(e) => updateContact(cIdx, 'tpmk_owner_no', e.target.value)}
+                                    placeholder="TPMK Sahip No"
+                                    className={inputClass}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Row 2: Telefonlar ve E-postalar */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Telefonlar */}
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
+                                    <LucidePhone size={14} />
+                                    Telefon Numaraları
+                                </label>
+                                {contact.phones.map((phone, pIdx) => (
+                                    <div key={pIdx} className="flex gap-2">
+                                        <input
+                                            type="tel"
+                                            value={phone}
+                                            onChange={(e) => updatePhone(cIdx, pIdx, e.target.value)}
+                                            placeholder="5XX XXX XX XX"
+                                            className={inputClass}
+                                        />
+                                        {contact.phones.length > 1 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => removePhone(cIdx, pIdx)}
+                                                className="shrink-0 p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                            >
+                                                <LucideTrash2 size={16} />
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                                <button
+                                    type="button"
+                                    onClick={() => addPhone(cIdx)}
+                                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                                >
+                                    <LucidePlus size={14} />
+                                    Telefon Ekle
+                                </button>
+                            </div>
+
+                            {/* E-postalar */}
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
+                                    <LucideMail size={14} />
+                                    E-posta Adresleri
+                                </label>
+                                {contact.emails.map((email, eIdx) => (
+                                    <div key={eIdx} className="flex gap-2">
+                                        <input
+                                            type="email"
+                                            value={email}
+                                            onChange={(e) => updateEmail(cIdx, eIdx, e.target.value)}
+                                            placeholder="ornek@sirket.com"
+                                            className={inputClass}
+                                        />
+                                        {contact.emails.length > 1 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => removeEmail(cIdx, eIdx)}
+                                                className="shrink-0 p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                            >
+                                                <LucideTrash2 size={16} />
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                                <button
+                                    type="button"
+                                    onClick={() => addEmail(cIdx)}
+                                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                                >
+                                    <LucidePlus size={14} />
+                                    E-posta Ekle
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
             <div className="grid gap-8 lg:grid-cols-2">
-                {/* Sol Taraf: Temel Bilgiler */}
+                {/* Sol Taraf: Genel Bilgiler */}
                 <div className="space-y-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
                     <h3 className="text-lg font-semibold text-gray-900 border-b pb-4 mb-4">
-                        İletişim ve Yetkili Bilgileri
+                        Genel Bilgiler
                     </h3>
 
                     <div className="grid gap-4">
                         <div className="grid gap-2">
-                            <label className="text-sm font-medium text-gray-700">Yetkili İsmi</label>
-                            <input
-                                name="authority_name"
-                                type="text"
-                                placeholder="Örn: Genel Müdürlük"
-                                className="flex h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#001a4f] focus:border-transparent"
-                            />
-                        </div>
-
-                        <div className="grid gap-2">
                             <label className="text-sm font-medium text-gray-700">Müşteri Temsilcisi</label>
                             <select
                                 name="representative"
-                                className="flex h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#001a4f] focus:border-transparent"
+                                className={inputClass}
                             >
                                 <option value="">İlgili müşteri temsilcisi seçiniz</option>
                                 {consultants?.map((c) => (
@@ -94,39 +315,10 @@ export default function FirmForm({ consultants }: { consultants: any[] }) {
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="grid gap-2">
-                                <label className="text-sm font-medium text-gray-700">Telefon Numarası</label>
-                                <input
-                                    name="phone"
-                                    type="tel"
-                                    placeholder="5XX XXX XX XX"
-                                    className="flex h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#001a4f] focus:border-transparent"
-                                />
-                            </div>
-                            <div className="grid gap-2">
-                                <label className="text-sm font-medium text-gray-700">E-posta</label>
-                                <input
-                                    name="email"
-                                    type="email"
-                                    placeholder="ornek@sirket.com"
-                                    className="flex h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#001a4f] focus:border-transparent"
-                                />
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="grid gap-2">
-                                <label className="text-sm font-medium text-gray-700">TPMK Sahip No</label>
-                                <input
-                                    name="tpmk_owner_no"
-                                    type="text"
-                                    className="flex h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#001a4f] focus:border-transparent"
-                                />
-                            </div>
-                            <div className="grid gap-2">
                                 <label className="text-sm font-medium text-gray-700">Sektör</label>
                                 <select
                                     name="sector"
-                                    className="flex h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#001a4f] focus:border-transparent"
+                                    className={inputClass}
                                 >
                                     <option value="">Seçiniz</option>
                                     {SECTORS.map(s => (
@@ -134,16 +326,15 @@ export default function FirmForm({ consultants }: { consultants: any[] }) {
                                     ))}
                                 </select>
                             </div>
-                        </div>
-
-                        <div className="grid gap-2">
-                            <label className="text-sm font-medium text-gray-700">Web Adresi</label>
-                            <input
-                                name="website"
-                                type="url"
-                                placeholder="https://"
-                                className="flex h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#001a4f] focus:border-transparent"
-                            />
+                            <div className="grid gap-2">
+                                <label className="text-sm font-medium text-gray-700">Web Adresi</label>
+                                <input
+                                    name="website"
+                                    type="url"
+                                    placeholder="https://"
+                                    className={inputClass}
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -162,7 +353,7 @@ export default function FirmForm({ consultants }: { consultants: any[] }) {
                                     name="corporate_title"
                                     type="text"
                                     required
-                                    className="flex h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#001a4f] focus:border-transparent"
+                                    className={inputClass}
                                 />
                             </div>
                             <div className="grid gap-2">
@@ -172,7 +363,7 @@ export default function FirmForm({ consultants }: { consultants: any[] }) {
                                     type="text"
                                     required
                                     placeholder="Listede görünecek kısa isim"
-                                    className="flex h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#001a4f] focus:border-transparent"
+                                    className={inputClass}
                                 />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
@@ -181,7 +372,7 @@ export default function FirmForm({ consultants }: { consultants: any[] }) {
                                     <input
                                         name="corporate_tax_office"
                                         type="text"
-                                        className="flex h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#001a4f] focus:border-transparent"
+                                        className={inputClass}
                                     />
                                 </div>
                                 <div className="grid gap-2">
@@ -189,7 +380,7 @@ export default function FirmForm({ consultants }: { consultants: any[] }) {
                                     <input
                                         name="corporate_tax_number"
                                         type="text"
-                                        className="flex h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#001a4f] focus:border-transparent"
+                                        className={inputClass}
                                     />
                                 </div>
                             </div>
@@ -211,9 +402,9 @@ export default function FirmForm({ consultants }: { consultants: any[] }) {
                                     name="individual_name_surname"
                                     type="text"
                                     required
-                                    className="flex h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#001a4f] focus:border-transparent"
+                                    defaultValue={contacts[0]?.full_name || ''}
+                                    className={inputClass}
                                 />
-                                {/* Hidden name field to map to common name column */}
                                 <input name="name" type="hidden" value="Individual" />
                             </div>
                             <div className="grid gap-2">
@@ -222,7 +413,8 @@ export default function FirmForm({ consultants }: { consultants: any[] }) {
                                     name="individual_tc"
                                     type="text"
                                     maxLength={11}
-                                    className="flex h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#001a4f] focus:border-transparent"
+                                    defaultValue={contacts[0]?.tc_no || ''}
+                                    className={inputClass}
                                 />
                             </div>
                             <div className="grid gap-2">
@@ -230,7 +422,7 @@ export default function FirmForm({ consultants }: { consultants: any[] }) {
                                 <input
                                     name="individual_born_date"
                                     type="date"
-                                    className="flex h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#001a4f] focus:border-transparent"
+                                    className={inputClass}
                                 />
                             </div>
                             <div className="grid gap-2">
