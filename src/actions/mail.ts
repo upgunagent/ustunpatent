@@ -61,33 +61,38 @@ export async function sendTrademarkNotification(
     emailContent: string, // Treat this as HTML
     subject: string,
     attachmentData: { filename: string, content: string }[],
-    ccRecipients: string[] = [] // New parameter
+    ccRecipients: string[] = [], // New parameter
+    toEmails?: string[] // Override TO recipients
 ) {
     try {
         const supabase = await createClient();
 
-        // 1. Fetch Firm Email
-        console.log(`Fetching firm details for ID: ${firmId}`);
-        const { data: firm, error: firmError } = await supabase
-            .from('firms')
-            .select('email')
-            .eq('id', firmId)
-            .single();
+        // 1. Determine TO email(s)
+        let toEmail: string;
+        if (toEmails && toEmails.length > 0) {
+            toEmail = toEmails.join(', ');
+        } else {
+            console.log(`Fetching firm details for ID: ${firmId}`);
+            const { data: firm, error: firmError } = await supabase
+                .from('firms')
+                .select('email')
+                .eq('id', firmId)
+                .single();
 
-        if (firmError) {
-            console.error('Supabase fetch error:', firmError);
-            return { success: false, message: `DB Hatası: ${firmError.message}` };
-        }
+            if (firmError) {
+                console.error('Supabase fetch error:', firmError);
+                return { success: false, message: `DB Hatası: ${firmError.message}` };
+            }
 
-        if (!firm) {
-            console.error('Firm not found for ID:', firmId);
-            return { success: false, message: 'Firma bilgileri alınamadı (Kayıt bulunamadı).' };
-        }
+            if (!firm) {
+                console.error('Firm not found for ID:', firmId);
+                return { success: false, message: 'Firma bilgileri alınamadı (Kayıt bulunamadı).' };
+            }
 
-        // Prioritize registered email
-        const toEmail = firm.email;
-        if (!toEmail) {
-            return { success: false, message: 'Firmaya ait kayıtlı e-posta adresi bulunamadı.' };
+            toEmail = firm.email;
+            if (!toEmail) {
+                return { success: false, message: 'Firmaya ait kayıtlı e-posta adresi bulunamadı.' };
+            }
         }
 
         // 2. Process Attachments
@@ -178,25 +183,31 @@ export async function sendContractEmail(
     emailContent: string,
     subject: string,
     attachmentData: { filename: string, content: string }[],
-    ccRecipients: string[] = [] // New parameter
+    ccRecipients: string[] = [], // New parameter
+    toEmails?: string[] // Override TO recipients
 ) {
     try {
         const supabase = await createClient();
 
-        // 1. Fetch Firm Email (Reuse logic or fetch new)
-        const { data: firm, error: firmError } = await supabase
-            .from('firms')
-            .select('email')
-            .eq('id', firmId)
-            .single();
+        // 1. Determine TO email(s)
+        let toEmail: string;
+        if (toEmails && toEmails.length > 0) {
+            toEmail = toEmails.join(', ');
+        } else {
+            const { data: firm, error: firmError } = await supabase
+                .from('firms')
+                .select('email')
+                .eq('id', firmId)
+                .single();
 
-        if (firmError || !firm) {
-            return { success: false, message: 'Firma bilgileri bulunamadı.' };
-        }
+            if (firmError || !firm) {
+                return { success: false, message: 'Firma bilgileri bulunamadı.' };
+            }
 
-        const toEmail = firm.email;
-        if (!toEmail) {
-            return { success: false, message: 'Firma e-postası bulunamadı.' };
+            toEmail = firm.email;
+            if (!toEmail) {
+                return { success: false, message: 'Firma e-postası bulunamadı.' };
+            }
         }
 
         // 2. Process Attachments

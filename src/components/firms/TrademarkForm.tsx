@@ -24,12 +24,14 @@ interface TrademarkFormProps {
     onClose: () => void;
     initialData?: any; // If provided, we are in edit mode
     firmContacts?: any[]; // Available contacts for the firm
+    firm?: any; // Firm data for firm name as rights owner
 }
 
-export default function TrademarkForm({ firmId, onClose, initialData, firmContacts = [] }: TrademarkFormProps) {
+export default function TrademarkForm({ firmId, onClose, initialData, firmContacts = [], firm }: TrademarkFormProps) {
     const isEditing = !!initialData;
     const [logoPreview, setLogoPreview] = useState<string | null>(initialData?.logo_url || null);
     const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
+    const [isFirmSelected, setIsFirmSelected] = useState(false);
 
     // Parse existing classes if any
     const initialClasses = initialData?.classes
@@ -80,8 +82,16 @@ export default function TrademarkForm({ firmId, onClose, initialData, firmContac
             getTrademarkContacts(initialData.id).then(contacts => {
                 setSelectedContactIds(contacts.map((c: any) => c.id));
             });
+
+            // Check if firm name is in rights_owner
+            if (initialData.rights_owner && firm) {
+                const firmName = firm.corporate_title || firm.individual_name_surname || firm.name;
+                if (firmName && initialData.rights_owner.includes(firmName)) {
+                    setIsFirmSelected(true);
+                }
+            }
         }
-    }, [isEditing, initialData?.id]);
+    }, [isEditing, initialData?.id, initialData?.rights_owner, firm]);
 
     const toggleContact = (contactId: string) => {
         setSelectedContactIds(prev =>
@@ -91,10 +101,17 @@ export default function TrademarkForm({ firmId, onClose, initialData, firmContac
         );
     };
 
-    // Build rights_owner from selected contacts
+    // Build rights_owner from selected contacts + firm name
+    const firmDisplayName = firm?.corporate_title || firm?.individual_name_surname || firm?.name || '';
     const selectedContactNames = firmContacts
         .filter(c => selectedContactIds.includes(c.id))
         .map(c => c.full_name);
+
+    const allRightsOwners = [
+        ...(isFirmSelected && firmDisplayName ? [firmDisplayName] : []),
+        ...selectedContactNames,
+    ];
+    const totalSelected = (isFirmSelected ? 1 : 0) + selectedContactIds.length;
 
     const handleSubmit = async (formData: FormData) => {
         formData.append('firm_id', firmId);
@@ -102,8 +119,8 @@ export default function TrademarkForm({ firmId, onClose, initialData, firmContac
         formData.append('search_keywords', searchKeywords.join(','));
         formData.append('contact_ids', JSON.stringify(selectedContactIds));
 
-        // Set rights_owner from selected contacts
-        formData.set('rights_owner', selectedContactNames.join(' - '));
+        // Set rights_owner from firm name + selected contacts
+        formData.set('rights_owner', allRightsOwners.join(' - '));
 
         // If editing, append ID and existing logo URL (as fallback if no new file)
         if (isEditing) {
@@ -236,14 +253,47 @@ export default function TrademarkForm({ firmId, onClose, initialData, firmContac
                             <label className="text-sm font-medium text-gray-700 flex items-center gap-2 mb-2">
                                 <LucideUsers size={16} className="text-[#001a4f]" />
                                 Marka Yetkilileri (Hak Sahipleri)
-                                {selectedContactIds.length > 0 && (
+                                {totalSelected > 0 && (
                                     <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                                        {selectedContactIds.length} seçili
+                                        {totalSelected} seçili
                                     </span>
                                 )}
                             </label>
-                            {firmContacts.length > 0 ? (
+                            {(firmContacts.length > 0 || firmDisplayName) ? (
                                 <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 space-y-2">
+                                    {/* Firma kendisi (Tüzel Kişi olarak) */}
+                                    {firmDisplayName && (
+                                        <label
+                                            className={`flex items-center gap-3 p-2.5 rounded-md cursor-pointer transition-colors ${isFirmSelected
+                                                ? 'bg-indigo-50 border border-indigo-200'
+                                                : 'hover:bg-white border border-transparent'
+                                                }`}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={isFirmSelected}
+                                                onChange={() => setIsFirmSelected(prev => !prev)}
+                                                className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                            />
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-sm font-medium text-gray-900 flex items-center gap-2">
+                                                    {firmDisplayName}
+                                                    <span className="text-[10px] font-semibold uppercase bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded">
+                                                        {firm?.type === 'corporate' ? 'Tüzel Kişi' : 'Firma'}
+                                                    </span>
+                                                </div>
+                                                <div className="text-xs text-gray-500">
+                                                    {firm?.corporate_tax_number && <span>VN: {firm.corporate_tax_number}</span>}
+                                                </div>
+                                            </div>
+                                        </label>
+                                    )}
+
+                                    {/* Firma yetkilileri arasına ayırıcı */}
+                                    {firmDisplayName && firmContacts.length > 0 && (
+                                        <div className="border-t border-gray-200 my-1"></div>
+                                    )}
+
                                     {firmContacts.map((contact) => (
                                         <label
                                             key={contact.id}
@@ -274,7 +324,7 @@ export default function TrademarkForm({ firmId, onClose, initialData, firmContac
                                 </div>
                             )}
                             {/* Hidden field to preserve Hak Sahibi for backward compat */}
-                            <input type="hidden" name="rights_owner" value={selectedContactNames.join(' - ') || initialData?.rights_owner || ''} />
+                            <input type="hidden" name="rights_owner" value={allRightsOwners.join(' - ') || initialData?.rights_owner || ''} />
                         </div>
 
                         <div className="grid gap-2">

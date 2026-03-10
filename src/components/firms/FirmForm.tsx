@@ -25,6 +25,7 @@ interface ContactEntry {
     full_name: string;
     tc_no: string;
     tpmk_owner_no: string;
+    birth_date: string;
     phones: string[];
     emails: string[];
 }
@@ -33,20 +34,24 @@ const emptyContact = (): ContactEntry => ({
     full_name: '',
     tc_no: '',
     tpmk_owner_no: '',
+    birth_date: '',
     phones: [''],
     emails: [''],
 });
 
 export default function FirmForm({ consultants }: { consultants: any[] }) {
     const [type, setType] = useState<'individual' | 'corporate'>('corporate');
-    const [contacts, setContacts] = useState<ContactEntry[]>([emptyContact()]);
+    const [contacts, setContacts] = useState<ContactEntry[]>([]);
+
+    // Firm-level phone/email state
+    const [firmPhones, setFirmPhones] = useState<string[]>(['']);
+    const [firmEmails, setFirmEmails] = useState<string[]>(['']);
 
     const addContact = () => {
         setContacts(prev => [...prev, emptyContact()]);
     };
 
     const removeContact = (index: number) => {
-        if (contacts.length <= 1) return;
         setContacts(prev => prev.filter((_, i) => i !== index));
     };
 
@@ -66,9 +71,26 @@ export default function FirmForm({ consultants }: { consultants: any[] }) {
         ));
     };
 
+    const formatPhoneNumber = (val: string) => {
+        const digits = val.replace(/\D/g, '');
+        const limited = digits.substring(0, 11);
+        let formatted = limited;
+        if (limited.length > 3) {
+            formatted = limited.substring(0, 4) + ' ' + limited.substring(4);
+        }
+        if (limited.length > 6) {
+            formatted = formatted.substring(0, 8) + ' ' + limited.substring(7);
+        }
+        if (limited.length > 8) {
+            formatted = formatted.substring(0, 11) + ' ' + limited.substring(9);
+        }
+        return formatted;
+    };
+
     const updatePhone = (contactIndex: number, phoneIndex: number, value: string) => {
+        const formatted = formatPhoneNumber(value);
         setContacts(prev => prev.map((c, i) =>
-            i === contactIndex ? { ...c, phones: c.phones.map((p, pi) => pi === phoneIndex ? value : p) } : c
+            i === contactIndex ? { ...c, phones: c.phones.map((p, pi) => pi === phoneIndex ? formatted : p) } : c
         ));
     };
 
@@ -90,9 +112,23 @@ export default function FirmForm({ consultants }: { consultants: any[] }) {
         ));
     };
 
+    // Firm-level phone/email helpers
+    const addFirmPhone = () => setFirmPhones(prev => [...prev, '']);
+    const removeFirmPhone = (idx: number) => setFirmPhones(prev => prev.filter((_, i) => i !== idx));
+    const updateFirmPhone = (idx: number, val: string) => {
+        const formatted = formatPhoneNumber(val);
+        setFirmPhones(prev => prev.map((p, i) => i === idx ? formatted : p));
+    };
+    const addFirmEmail = () => setFirmEmails(prev => [...prev, '']);
+    const removeFirmEmail = (idx: number) => setFirmEmails(prev => prev.filter((_, i) => i !== idx));
+    const updateFirmEmail = (idx: number, val: string) => setFirmEmails(prev => prev.map((e, i) => i === idx ? val : e));
+
     const handleSubmit = async (formData: FormData) => {
-        // Inject contacts JSON into form data
+        // Inject contacts JSON into form data (may be empty)
         formData.append('contacts', JSON.stringify(contacts));
+        // Inject firm-level phones/emails
+        formData.append('firm_phones', JSON.stringify(firmPhones));
+        formData.append('firm_emails', JSON.stringify(firmEmails));
 
         // Set individual name from first contact if individual type
         if (type === 'individual' && !formData.get('individual_name_surname')) {
@@ -145,7 +181,7 @@ export default function FirmForm({ consultants }: { consultants: any[] }) {
             <div className="space-y-4">
                 <div className="flex items-center justify-between">
                     <h3 className="text-lg font-semibold text-gray-900">
-                        Yetkili Kişiler
+                        Yetkili Kişiler / Ortaklar / Marka Sahipleri
                         <span className="ml-2 text-sm font-normal text-gray-500">({contacts.length} kişi)</span>
                     </h3>
                     <button
@@ -214,6 +250,19 @@ export default function FirmForm({ consultants }: { consultants: any[] }) {
                             </div>
                         </div>
 
+                        {/* Row 1.5: Doğum Tarihi */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="grid gap-1.5">
+                                <label className="text-sm font-medium text-gray-700">Doğum Tarihi</label>
+                                <input
+                                    type="date"
+                                    value={contact.birth_date || ''}
+                                    onChange={(e) => updateContact(cIdx, 'birth_date', e.target.value)}
+                                    className={inputClass}
+                                />
+                            </div>
+                        </div>
+
                         {/* Row 2: Telefonlar ve E-postalar */}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {/* Telefonlar */}
@@ -228,7 +277,7 @@ export default function FirmForm({ consultants }: { consultants: any[] }) {
                                             type="tel"
                                             value={phone}
                                             onChange={(e) => updatePhone(cIdx, pIdx, e.target.value)}
-                                            placeholder="5XX XXX XX XX"
+                                            placeholder="05XX XXX XX XX"
                                             className={inputClass}
                                         />
                                         {contact.phones.length > 1 && (
@@ -386,6 +435,62 @@ export default function FirmForm({ consultants }: { consultants: any[] }) {
                             </div>
 
                             <div className="grid gap-2">
+                                <label className="text-sm font-medium text-gray-700">Marka Sahip No</label>
+                                <input
+                                    name="firm_tpmk_owner_no"
+                                    type="text"
+                                    placeholder="TPMK Sahip No"
+                                    className={inputClass}
+                                />
+                            </div>
+
+                            <div className="grid gap-2">
+                                <label className="text-sm font-medium text-gray-700 flex items-center gap-1"><LucidePhone size={14} /> Firma Telefon</label>
+                                {firmPhones.map((phone, pIdx) => (
+                                    <div key={pIdx} className="flex items-center gap-2">
+                                        <input
+                                            type="tel"
+                                            value={phone}
+                                            onChange={(e) => updateFirmPhone(pIdx, e.target.value)}
+                                            placeholder="05XX XXX XX XX"
+                                            className={inputClass}
+                                        />
+                                        {firmPhones.length > 1 && (
+                                            <button type="button" onClick={() => removeFirmPhone(pIdx)} className="shrink-0 p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors">
+                                                <LucideTrash2 size={16} />
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                                <button type="button" onClick={addFirmPhone} className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium">
+                                    <LucidePlus size={14} /> Telefon Ekle
+                                </button>
+                            </div>
+
+                            <div className="grid gap-2">
+                                <label className="text-sm font-medium text-gray-700 flex items-center gap-1"><LucideMail size={14} /> Firma E-posta</label>
+                                {firmEmails.map((email, eIdx) => (
+                                    <div key={eIdx} className="flex items-center gap-2">
+                                        <input
+                                            type="email"
+                                            value={email}
+                                            onChange={(e) => updateFirmEmail(eIdx, e.target.value)}
+                                            placeholder="firma@ornek.com"
+                                            className={inputClass}
+                                        />
+                                        {firmEmails.length > 1 && (
+                                            <button type="button" onClick={() => removeFirmEmail(eIdx)} className="shrink-0 p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors">
+                                                <LucideTrash2 size={16} />
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                                <button type="button" onClick={addFirmEmail} className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium">
+                                    <LucidePlus size={14} /> E-posta Ekle
+                                </button>
+                            </div>
+
+                            <div className="grid gap-2">
                                 <label className="text-sm font-medium text-gray-700">Firma Adresi</label>
                                 <textarea
                                     name="corporate_address"
@@ -415,6 +520,22 @@ export default function FirmForm({ consultants }: { consultants: any[] }) {
                                     maxLength={11}
                                     defaultValue={contacts[0]?.tc_no || ''}
                                     className={inputClass}
+                                    onChange={(e) => {
+                                        // TC = Vergi No for individual firms
+                                        const taxNoInput = document.querySelector('input[name="individual_tax_number_hidden"]') as HTMLInputElement;
+                                        if (taxNoInput) taxNoInput.value = e.target.value;
+                                    }}
+                                />
+                                {/* Hidden field: vergi numarası = TC for individual */}
+                                <input name="individual_tax_number_hidden" type="hidden" defaultValue={contacts[0]?.tc_no || ''} />
+                            </div>
+                            <div className="grid gap-2">
+                                <label className="text-sm font-medium text-gray-700">Vergi Dairesi</label>
+                                <input
+                                    name="individual_tax_office"
+                                    type="text"
+                                    placeholder="Vergi dairesi adı"
+                                    className={inputClass}
                                 />
                             </div>
                             <div className="grid gap-2">
@@ -425,6 +546,63 @@ export default function FirmForm({ consultants }: { consultants: any[] }) {
                                     className={inputClass}
                                 />
                             </div>
+
+                            <div className="grid gap-2">
+                                <label className="text-sm font-medium text-gray-700">Marka Sahip No</label>
+                                <input
+                                    name="firm_tpmk_owner_no"
+                                    type="text"
+                                    placeholder="TPMK Sahip No"
+                                    className={inputClass}
+                                />
+                            </div>
+
+                            <div className="grid gap-2">
+                                <label className="text-sm font-medium text-gray-700 flex items-center gap-1"><LucidePhone size={14} /> Telefon</label>
+                                {firmPhones.map((phone, pIdx) => (
+                                    <div key={pIdx} className="flex items-center gap-2">
+                                        <input
+                                            type="tel"
+                                            value={phone}
+                                            onChange={(e) => updateFirmPhone(pIdx, e.target.value)}
+                                            placeholder="05XX XXX XX XX"
+                                            className={inputClass}
+                                        />
+                                        {firmPhones.length > 1 && (
+                                            <button type="button" onClick={() => removeFirmPhone(pIdx)} className="shrink-0 p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors">
+                                                <LucideTrash2 size={16} />
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                                <button type="button" onClick={addFirmPhone} className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium">
+                                    <LucidePlus size={14} /> Telefon Ekle
+                                </button>
+                            </div>
+
+                            <div className="grid gap-2">
+                                <label className="text-sm font-medium text-gray-700 flex items-center gap-1"><LucideMail size={14} /> E-posta</label>
+                                {firmEmails.map((email, eIdx) => (
+                                    <div key={eIdx} className="flex items-center gap-2">
+                                        <input
+                                            type="email"
+                                            value={email}
+                                            onChange={(e) => updateFirmEmail(eIdx, e.target.value)}
+                                            placeholder="ornek@firma.com"
+                                            className={inputClass}
+                                        />
+                                        {firmEmails.length > 1 && (
+                                            <button type="button" onClick={() => removeFirmEmail(eIdx)} className="shrink-0 p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors">
+                                                <LucideTrash2 size={16} />
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                                <button type="button" onClick={addFirmEmail} className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium">
+                                    <LucidePlus size={14} /> E-posta Ekle
+                                </button>
+                            </div>
+
                             <div className="grid gap-2">
                                 <label className="text-sm font-medium text-gray-700">Adres</label>
                                 <textarea

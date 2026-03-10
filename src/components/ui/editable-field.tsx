@@ -81,7 +81,29 @@ export default function EditableField({
                         <input
                             type={type}
                             value={currentValue}
-                            onChange={(e) => setCurrentValue(e.target.value)}
+                            onChange={(e) => {
+                                let val = e.target.value;
+                                if (type === 'tel') {
+                                    // Sadece rakamları tut
+                                    const digits = val.replace(/\D/g, '');
+                                    // 11 haneye sınırla (05XXXXXXXXX formatı beklendiği için, eğer 0 ile başlıyorsa)
+                                    const limited = digits.substring(0, 11);
+
+                                    // Formatlama (Örn: 0212 222 22 22 veya 0532 222 22 22)
+                                    let formatted = limited;
+                                    if (limited.length > 3) {
+                                        formatted = limited.substring(0, 4) + ' ' + limited.substring(4);
+                                    }
+                                    if (limited.length > 6) {
+                                        formatted = formatted.substring(0, 8) + ' ' + limited.substring(7);
+                                    }
+                                    if (limited.length > 8) {
+                                        formatted = formatted.substring(0, 11) + ' ' + limited.substring(9);
+                                    }
+                                    val = formatted;
+                                }
+                                setCurrentValue(val);
+                            }}
                             className="w-full rounded-md border border-gray-300 p-2 text-sm focus:border-[#001a4f] focus:outline-none focus:ring-1 focus:ring-[#001a4f]"
                             autoFocus
                         />

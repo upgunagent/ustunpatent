@@ -30,6 +30,11 @@ export interface WatchedTrademark {
         tax_number: string | null;
         email: string | null;
         website: string | null;
+        firm_tpmk_owner_no?: string | null;
+        firm_phones?: string[] | null;
+        firm_emails?: string[] | null;
+        individual_tax_office?: string | null;
+        individual_tc?: string | null;
     }
 }
 
@@ -58,7 +63,11 @@ export async function getWatchedTrademarks(year?: string, month?: string): Promi
                 corporate_tax_office,
                 corporate_tax_number,
                 corporate_address,
-                website
+                website,
+                firm_tpmk_owner_no,
+                firm_phones,
+                firm_emails,
+                individual_tax_office
             )
         `)
         .eq('watch_agreement', true)
@@ -175,7 +184,12 @@ export async function getWatchedTrademarks(year?: string, month?: string): Promi
                 tax_office: firm.corporate_tax_office,
                 tax_number: firm.corporate_tax_number,
                 email: firm.email,
-                website: firm.website
+                website: firm.website,
+                firm_tpmk_owner_no: firm.firm_tpmk_owner_no,
+                firm_phones: firm.firm_phones,
+                firm_emails: firm.firm_emails,
+                individual_tax_office: firm.individual_tax_office,
+                individual_tc: firm.individual_tc,
             } : undefined
         };
     });

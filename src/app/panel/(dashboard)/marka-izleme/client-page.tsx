@@ -16,7 +16,7 @@ import { toast } from 'sonner';
 
 import { FirmCombobox } from '@/components/firms/FirmCombobox';
 import { MultiEmailInput } from '@/components/ui/multi-email-input';
-import { getFirmTrademarks, getFirm } from '@/actions/firms';
+import { getFirmTrademarks, getFirm, getFirmContacts } from '@/actions/firms';
 import { searchBulletinMarks } from '@/actions/bulletins';
 
 import { getAgencySettings } from '@/actions/settings';
@@ -57,9 +57,13 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
     const [isMailModalOpen, setIsMailModalOpen] = useState(false);
     const [mailSubject, setMailSubject] = useState('');
     const [mailContent, setMailContent] = useState('');
-    const [emailCC, setEmailCC] = useState<string[]>([]); // New state for CC
+    const [emailCC, setEmailCC] = useState<string[]>([]);
+    const [mailToEmails, setMailToEmails] = useState<string[]>([]);
     const [isSendingMail, setIsSendingMail] = useState(false);
     const editorRef = useRef<HTMLDivElement>(null);
+
+    // Firm Contacts State
+    const [firmContacts, setFirmContacts] = useState<any[]>([]);
 
     // Sync editor content when mailContent changes (e.g. template load)
     useEffect(() => {
@@ -86,7 +90,7 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
         getAgencySettings().then(setAgencySettings);
     }, []);
 
-    // Fetch trademarks when firm is selected
+    // Fetch trademarks and contacts when firm is selected
     useEffect(() => {
         if (selectedFirmId) {
             setLoadingTrademarks(true);
@@ -95,9 +99,11 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
                 .finally(() => setLoadingTrademarks(false));
 
             getFirm(selectedFirmId).then(setSelectedFirm);
+            getFirmContacts(selectedFirmId).then(setFirmContacts);
         } else {
             setFirmTrademarks([]);
             setSelectedFirm(null);
+            setFirmContacts([]);
         }
     }, [selectedFirmId]);
 
@@ -224,7 +230,25 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
 
         setMailSubject(subject);
         setMailContent(content);
-        setEmailCC([]); // Reset CC
+        setEmailCC([]);
+        // Collect TO emails: firma + tüm yetkili kişiler
+        const toEmails: string[] = [];
+        // Firma düzeyindeki e-postalar
+        const firmEmails = selectedFirm?.firm_emails || [];
+        firmEmails.filter(Boolean).forEach((e: string) => {
+            if (!toEmails.includes(e)) toEmails.push(e);
+        });
+        // Legacy fallback
+        if (toEmails.length === 0 && selectedFirm?.email) toEmails.push(selectedFirm.email);
+        // Tüm yetkili kişi e-postaları
+        firmContacts.forEach((c: any) => {
+            if (c.emails && c.emails.length > 0) {
+                c.emails.filter(Boolean).forEach((e: string) => {
+                    if (!toEmails.includes(e)) toEmails.push(e);
+                });
+            }
+        });
+        setMailToEmails(toEmails);
         setIsMailModalOpen(true);
     };
 
@@ -257,8 +281,26 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
 
         setMailSubject(subject);
         setMailContent(content);
-        setMailQueue([]); // Clear queue as this is a "no match" mail
-        setEmailCC([]); // Reset CC
+        setMailQueue([]);
+        setEmailCC([]);
+        // Collect TO emails: firma + tüm yetkili kişiler
+        const toEmails: string[] = [];
+        // Firma düzeyindeki e-postalar
+        const firmEmails = selectedFirm?.firm_emails || [];
+        firmEmails.filter(Boolean).forEach((e: string) => {
+            if (!toEmails.includes(e)) toEmails.push(e);
+        });
+        // Legacy fallback
+        if (toEmails.length === 0 && selectedFirm?.email) toEmails.push(selectedFirm.email);
+        // Tüm yetkili kişi e-postaları
+        firmContacts.forEach((c: any) => {
+            if (c.emails && c.emails.length > 0) {
+                c.emails.filter(Boolean).forEach((e: string) => {
+                    if (!toEmails.includes(e)) toEmails.push(e);
+                });
+            }
+        });
+        setMailToEmails(toEmails);
         setIsMailModalOpen(true);
     };
 
@@ -312,7 +354,7 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
             console.log('Sending to server action...', validAttachments.length, 'attachments');
             // Get content from ref instead of state to ensure we have latest edits without re-renders
             const currentContent = editorRef.current?.innerHTML || mailContent;
-            const result = await sendTrademarkNotification(selectedFirmId, currentContent, mailSubject, validAttachments, emailCC);
+            const result = await sendTrademarkNotification(selectedFirmId, currentContent, mailSubject, validAttachments, emailCC, mailToEmails);
             console.log('Server response:', result);
 
             if (result && result.success) {
@@ -721,10 +763,12 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
 
                             <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
                                 <div>
-                                    <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Kime</label>
-                                    <div className="p-2 bg-gray-50 rounded border text-sm">
-                                        {selectedFirm?.email || selectedFirm?.info_email || selectedFirm?.contact_email || 'Kayıtlı e-posta yok'}
-                                    </div>
+                                    <MultiEmailInput
+                                        value={mailToEmails}
+                                        onChange={setMailToEmails}
+                                        label="Kime"
+                                        placeholder="E-posta ekleyin..."
+                                    />
                                 </div>
 
                                 <div>

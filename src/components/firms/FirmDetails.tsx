@@ -31,7 +31,7 @@ export default function FirmDetails({ firm, trademarks, agencySettings, firmCont
     const [editContactData, setEditContactData] = useState<any>(null);
     const [isAddingContact, setIsAddingContact] = useState(false);
     const [newContact, setNewContact] = useState<ContactData>({
-        full_name: '', tc_no: '', tpmk_owner_no: '', phones: [''], emails: [''],
+        full_name: '', tc_no: '', tpmk_owner_no: '', birth_date: '', phones: [''], emails: [''],
     });
 
     const handleDeleteAction = async (actionId: string) => {
@@ -125,14 +125,31 @@ export default function FirmDetails({ firm, trademarks, agencySettings, firmCont
             full_name: contact.full_name || '',
             tc_no: contact.tc_no || '',
             tpmk_owner_no: contact.tpmk_owner_no || '',
+            birth_date: contact.birth_date || '',
             phones: contact.phones?.length > 0 ? [...contact.phones] : [''],
             emails: contact.emails?.length > 0 ? [...contact.emails] : [''],
         });
     };
 
-    // Collect all phones and emails from contacts for the header
-    const allPhones = firmContacts.flatMap(c => c.phones || []).filter(Boolean);
-    const allEmails = firmContacts.flatMap(c => c.emails || []).filter(Boolean);
+    const formatPhoneNumber = (val: string) => {
+        const digits = val.replace(/\D/g, '');
+        const limited = digits.substring(0, 11);
+        let formatted = limited;
+        if (limited.length > 3) {
+            formatted = limited.substring(0, 4) + ' ' + limited.substring(4);
+        }
+        if (limited.length > 6) {
+            formatted = formatted.substring(0, 8) + ' ' + limited.substring(7);
+        }
+        if (limited.length > 8) {
+            formatted = formatted.substring(0, 11) + ' ' + limited.substring(9);
+        }
+        return formatted;
+    };
+
+    // Collect firm-level phones and emails for the header (not contacts)
+    const allPhones = (firm.firm_phones || []).filter(Boolean);
+    const allEmails = (firm.firm_emails || []).filter(Boolean);
 
     const getStatusBadge = (status: string, id: string) => {
         const styles: Record<string, string> = {
@@ -195,7 +212,7 @@ export default function FirmDetails({ firm, trademarks, agencySettings, firmCont
                             <p className="text-xs text-white/50 uppercase tracking-wider font-semibold">Telefon</p>
                             {allPhones.length > 0 ? (
                                 <div className="space-y-0.5">
-                                    {allPhones.slice(0, 2).map((p, i) => (
+                                    {allPhones.slice(0, 2).map((p: string, i: number) => (
                                         <p key={i} className="font-medium">{p}</p>
                                     ))}
                                     {allPhones.length > 2 && (
@@ -211,7 +228,7 @@ export default function FirmDetails({ firm, trademarks, agencySettings, firmCont
                             <p className="text-xs text-white/50 uppercase tracking-wider font-semibold">E-posta</p>
                             {allEmails.length > 0 ? (
                                 <div className="space-y-0.5">
-                                    {allEmails.slice(0, 2).map((e, i) => (
+                                    {allEmails.slice(0, 2).map((e: string, i: number) => (
                                         <p key={i} className="font-medium text-sm">{e}</p>
                                     ))}
                                     {allEmails.length > 2 && (
@@ -263,6 +280,15 @@ export default function FirmDetails({ firm, trademarks, agencySettings, firmCont
                                         <EditableField firmId={firm.id} field="corporate_tax_office" value={firm.corporate_tax_office} label="Vergi Dairesi" />
                                         <EditableField firmId={firm.id} field="corporate_tax_number" value={firm.corporate_tax_number} label="Vergi Numarası" />
                                     </div>
+                                    <div>
+                                        <EditableField firmId={firm.id} field="firm_tpmk_owner_no" value={firm.firm_tpmk_owner_no} label="Marka Sahip No" />
+                                    </div>
+                                    <div>
+                                        <EditableField firmId={firm.id} field="firm_phones" value={(firm.firm_phones || []).join(', ')} label="Firma Telefon" type="tel" />
+                                    </div>
+                                    <div>
+                                        <EditableField firmId={firm.id} field="firm_emails" value={(firm.firm_emails || []).join(', ')} label="Firma E-posta" />
+                                    </div>
                                 </>
                             ) : (
                                 <>
@@ -272,6 +298,20 @@ export default function FirmDetails({ firm, trademarks, agencySettings, firmCont
                                     <div className="grid grid-cols-2 gap-4">
                                         <EditableField firmId={firm.id} field="individual_tc" value={firm.individual_tc} label="TC Kimlik No" />
                                         <EditableField firmId={firm.id} field="individual_born_date" value={firm.individual_born_date} label="Doğum Tarihi" type="date" />
+                                    </div>
+                                    <div>
+                                        <EditableField firmId={firm.id} field="individual_tax_office" value={firm.individual_tax_office} label="Vergi Dairesi" />
+                                    </div>
+                                    <div>
+                                        <EditableField firmId={firm.id} field="firm_tpmk_owner_no" value={firm.firm_tpmk_owner_no} label="Marka Sahip No" />
+                                    </div>
+                                    <div>
+                                        <EditableField firmId={firm.id} field="firm_phones" value={(firm.firm_phones || []).join(', ')} label="Telefon" type="tel" />
+                                    </div>
+                                    <div>
+                                        <EditableField firmId={firm.id} field="firm_emails" value={(firm.firm_emails || []).join(', ')} label="E-posta" />
+                                    </div>
+                                    <div>
                                         <EditableField firmId={firm.id} field="individual_address" value={firm.individual_address} multiline label="Adres" />
                                     </div>
                                 </>
@@ -303,7 +343,7 @@ export default function FirmDetails({ firm, trademarks, agencySettings, firmCont
                         <div className="flex items-center justify-between border-b pb-3 mb-4">
                             <h3 className="font-semibold text-gray-900 flex items-center gap-2">
                                 <LucideUsers size={18} className="text-[#001a4f]" />
-                                Yetkili Kişiler
+                                Yetkili Kişiler / Ortaklar / Marka Sahipleri
                                 <span className="text-xs font-normal text-gray-400">({firmContacts.length})</span>
                             </h3>
                             <button
@@ -343,6 +383,17 @@ export default function FirmDetails({ firm, trademarks, agencySettings, firmCont
                                             className="text-sm border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-[#001a4f] focus:outline-none"
                                         />
                                     </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label className="text-xs font-medium text-gray-500">Doğum Tarihi</label>
+                                            <input
+                                                type="date"
+                                                value={newContact.birth_date || ''}
+                                                onChange={e => setNewContact(p => ({ ...p, birth_date: e.target.value }))}
+                                                className="w-full text-sm border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-[#001a4f] focus:outline-none"
+                                            />
+                                        </div>
+                                    </div>
                                     {/* Phones */}
                                     <div className="space-y-1">
                                         <label className="text-xs font-medium text-gray-500">Telefonlar</label>
@@ -350,11 +401,11 @@ export default function FirmDetails({ firm, trademarks, agencySettings, firmCont
                                             <div key={i} className="flex gap-1">
                                                 <input
                                                     type="tel"
-                                                    placeholder="5XX XXX XX XX"
+                                                    placeholder="05XX XXX XX XX"
                                                     value={p}
                                                     onChange={e => {
                                                         const phones = [...newContact.phones];
-                                                        phones[i] = e.target.value;
+                                                        phones[i] = formatPhoneNumber(e.target.value);
                                                         setNewContact(prev => ({ ...prev, phones }));
                                                     }}
                                                     className="flex-1 text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:ring-2 focus:ring-[#001a4f] focus:outline-none"
@@ -394,7 +445,7 @@ export default function FirmDetails({ firm, trademarks, agencySettings, firmCont
                                             className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1"><LucidePlus size={12} /> E-posta Ekle</button>
                                     </div>
                                     <div className="flex justify-end gap-2 pt-2">
-                                        <button onClick={() => { setIsAddingContact(false); setNewContact({ full_name: '', tc_no: '', tpmk_owner_no: '', phones: [''], emails: [''] }); }}
+                                        <button onClick={() => { setIsAddingContact(false); setNewContact({ full_name: '', tc_no: '', tpmk_owner_no: '', birth_date: '', phones: [''], emails: [''] }); }}
                                             className="text-xs text-gray-500 hover:text-gray-700 px-3 py-1.5 rounded border border-gray-300 hover:bg-gray-50">İptal</button>
                                         <button onClick={handleAddContact}
                                             className="text-xs text-white bg-green-600 hover:bg-green-700 px-3 py-1.5 rounded font-medium">Kaydet</button>
@@ -419,15 +470,23 @@ export default function FirmDetails({ firm, trademarks, agencySettings, firmCont
                                                     onChange={e => setEditContactData((p: any) => ({ ...p, tpmk_owner_no: e.target.value }))}
                                                     className="text-xs border border-gray-300 rounded-md px-2 py-1.5 focus:ring-2 focus:ring-[#001a4f] focus:outline-none" />
                                             </div>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div>
+                                                    <label className="text-[10px] font-medium text-gray-500 uppercase">Doğum Tarihi</label>
+                                                    <input type="date" value={editContactData.birth_date || ''}
+                                                        onChange={e => setEditContactData((p: any) => ({ ...p, birth_date: e.target.value }))}
+                                                        className="w-full text-xs border border-gray-300 rounded-md px-2 py-1.5 focus:ring-2 focus:ring-[#001a4f] focus:outline-none" />
+                                                </div>
+                                            </div>
                                             {/* Edit Phones */}
                                             <div className="space-y-1">
                                                 <label className="text-[10px] font-medium text-gray-500 uppercase">Telefonlar</label>
                                                 {editContactData.phones.map((p: string, i: number) => (
                                                     <div key={i} className="flex gap-1">
-                                                        <input type="tel" value={p}
+                                                        <input type="tel" value={p} placeholder="05XX XXX XX XX"
                                                             onChange={e => {
                                                                 const phones = [...editContactData.phones];
-                                                                phones[i] = e.target.value;
+                                                                phones[i] = formatPhoneNumber(e.target.value);
                                                                 setEditContactData((prev: any) => ({ ...prev, phones }));
                                                             }}
                                                             className="flex-1 text-xs border border-gray-300 rounded px-2 py-1 focus:ring-1 focus:ring-[#001a4f] focus:outline-none" />
@@ -483,6 +542,7 @@ export default function FirmDetails({ firm, trademarks, agencySettings, firmCont
                                             <div className="text-xs text-gray-500 space-y-0.5">
                                                 {contact.tc_no && <div>TC: {contact.tc_no}</div>}
                                                 {contact.tpmk_owner_no && <div>Sahip No: {contact.tpmk_owner_no}</div>}
+                                                {contact.birth_date && <div>Doğum: {new Date(contact.birth_date).toLocaleDateString('tr-TR')}</div>}
                                                 {contact.phones?.filter(Boolean).length > 0 && (
                                                     <div className="flex items-center gap-1">
                                                         <LucidePhone size={11} />
@@ -805,6 +865,7 @@ export default function FirmDetails({ firm, trademarks, agencySettings, firmCont
                         }}
                         initialData={editingTrademark}
                         firmContacts={firmContacts}
+                        firm={firm}
                     />
                 )
             }
@@ -816,6 +877,7 @@ export default function FirmDetails({ firm, trademarks, agencySettings, firmCont
                         trademarks={trademarks}
                         action={contractAction}
                         agencySettings={agencySettings}
+                        firmContacts={firmContacts}
                         onClose={() => {
                             setIsContractModalOpen(false);
                             setContractAction(null);

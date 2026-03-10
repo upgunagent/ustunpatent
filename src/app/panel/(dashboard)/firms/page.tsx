@@ -15,7 +15,7 @@ export default async function FirmsPage({ searchParams }: { searchParams: Promis
 
     let dbQuery = supabase
         .from("firms")
-        .select("*")
+        .select("*, firm_contacts(full_name)")
         .order("created_at", { ascending: false });
 
     if (query) {
@@ -33,6 +33,24 @@ export default async function FirmsPage({ searchParams }: { searchParams: Promis
         console.error("Error fetching firms:", error);
         return <div>Firmalar yüklenirken bir hata oluştu.</div>;
     }
+
+    // Helper: build yetkili display
+    const getYetkiliDisplay = (firm: any) => {
+        const names: string[] = [];
+        // For individual, start with the owner name
+        if (firm.type === 'individual' && firm.individual_name_surname) {
+            names.push(firm.individual_name_surname);
+        }
+        // Add contact names
+        if (firm.firm_contacts && Array.isArray(firm.firm_contacts)) {
+            firm.firm_contacts.forEach((c: any) => {
+                if (c.full_name && !names.includes(c.full_name)) {
+                    names.push(c.full_name);
+                }
+            });
+        }
+        return names.length > 0 ? names.join(', ') : '-';
+    };
 
     return (
         <div className="space-y-6">
@@ -89,13 +107,13 @@ export default async function FirmsPage({ searchParams }: { searchParams: Promis
                                         </span>
                                     </td>
                                     <td className="px-6 py-4">
-                                        <CopyableText text={firm.type === 'corporate' ? firm.corporate_authorized_person : firm.individual_name_surname || '-'} />
+                                        <CopyableText text={getYetkiliDisplay(firm)} />
                                     </td>
                                     <td className="px-6 py-4">
-                                        <CopyableText text={firm.phone || '-'} />
+                                        <CopyableText text={(firm.firm_phones || []).filter(Boolean).join(', ') || firm.phone || '-'} />
                                     </td>
                                     <td className="px-6 py-4">
-                                        <CopyableText text={firm.email || '-'} />
+                                        <CopyableText text={(firm.firm_emails || []).filter(Boolean).join(', ') || firm.email || '-'} />
                                     </td>
                                     <td className="px-6 py-4">{firm.sector}</td>
                                     <td className="px-6 py-4 text-right">
@@ -119,6 +137,6 @@ export default async function FirmsPage({ searchParams }: { searchParams: Promis
                     </tbody>
                 </table>
             </div>
-        </div>
+        </div >
     );
 }

@@ -9,6 +9,7 @@ export interface ContactData {
     full_name: string;
     tc_no?: string;
     tpmk_owner_no?: string;
+    birth_date?: string;
     phones: string[];
     emails: string[];
 }
@@ -25,12 +26,25 @@ export async function createFirm(formData: FormData) {
         representative: formData.get('representative'),
         sector: formData.get('sector'),
         type: type,
+        // Firm-level trademark owner fields
+        firm_tpmk_owner_no: formData.get('firm_tpmk_owner_no') || null,
     };
+
+    // Parse firm-level phones and emails
+    const firmPhonesJson = formData.get('firm_phones') as string;
+    const firmEmailsJson = formData.get('firm_emails') as string;
+    if (firmPhonesJson) {
+        try { newFirm.firm_phones = JSON.parse(firmPhonesJson).filter(Boolean); } catch { newFirm.firm_phones = []; }
+    }
+    if (firmEmailsJson) {
+        try { newFirm.firm_emails = JSON.parse(firmEmailsJson).filter(Boolean); } catch { newFirm.firm_emails = []; }
+    }
 
     if (type === 'individual') {
         newFirm.individual_name_surname = formData.get('individual_name_surname');
         newFirm.individual_tc = formData.get('individual_tc');
         newFirm.individual_born_date = formData.get('individual_born_date') || null;
+        newFirm.individual_tax_office = formData.get('individual_tax_office') || null;
         newFirm.individual_address = formData.get('individual_address');
     } else {
         newFirm.corporate_title = formData.get('corporate_title');
@@ -61,6 +75,7 @@ export async function createFirm(formData: FormData) {
                     full_name: c.full_name,
                     tc_no: c.tc_no || null,
                     tpmk_owner_no: c.tpmk_owner_no || null,
+                    birth_date: c.birth_date || null,
                     phones: c.phones.filter(Boolean),
                     emails: c.emails.filter(Boolean),
                 }));
@@ -267,6 +282,14 @@ export async function updateTrademark(formData: FormData) {
 export async function updateFirm(firmId: string, data: any) {
     const supabase = await createClient();
 
+    // Parse array fields if they come as comma separated strings from EditableField
+    if (typeof data.firm_phones === 'string') {
+        data.firm_phones = data.firm_phones.split(',').map((s: string) => s.trim()).filter(Boolean);
+    }
+    if (typeof data.firm_emails === 'string') {
+        data.firm_emails = data.firm_emails.split(',').map((s: string) => s.trim()).filter(Boolean);
+    }
+
     const { error } = await supabase
         .from('firms')
         .update(data)
@@ -459,6 +482,7 @@ export async function addFirmContact(firmId: string, contact: ContactData) {
             full_name: contact.full_name,
             tc_no: contact.tc_no || null,
             tpmk_owner_no: contact.tpmk_owner_no || null,
+            birth_date: contact.birth_date || null,
             phones: contact.phones.filter(Boolean),
             emails: contact.emails.filter(Boolean),
         })
@@ -481,6 +505,7 @@ export async function updateFirmContact(contactId: string, firmId: string, conta
     if (contact.full_name !== undefined) updateData.full_name = contact.full_name;
     if (contact.tc_no !== undefined) updateData.tc_no = contact.tc_no || null;
     if (contact.tpmk_owner_no !== undefined) updateData.tpmk_owner_no = contact.tpmk_owner_no || null;
+    if (contact.birth_date !== undefined) updateData.birth_date = contact.birth_date || null;
     if (contact.phones !== undefined) updateData.phones = contact.phones.filter(Boolean);
     if (contact.emails !== undefined) updateData.emails = contact.emails.filter(Boolean);
     updateData.updated_at = new Date().toISOString();

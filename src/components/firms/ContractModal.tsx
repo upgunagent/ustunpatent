@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
-import { LucideX, LucideFileText, LucideSend, LucideDownload, LucideRefreshCcw, LucideMail } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { LucideX, LucideFileText, LucideSend, LucideDownload, LucideRefreshCcw, LucideMail, LucideUsers } from 'lucide-react';
 import { ContractData, generateContractPDF } from '@/lib/contract-pdf';
 import { toast } from 'sonner';
 import { sendContractEmail } from '@/actions/mail';
 import { MultiEmailInput } from '@/components/ui/multi-email-input';
+import { getTrademarkContacts } from '@/actions/firms';
 
 interface ContractModalProps {
     onClose: () => void;
@@ -11,9 +12,10 @@ interface ContractModalProps {
     trademarks: any[];
     action: any; // The selected history action
     agencySettings: any;
+    firmContacts?: any[]; // Firma yetkili kişileri
 }
 
-export default function ContractModal({ onClose, firm, trademarks, action, agencySettings }: ContractModalProps) {
+export default function ContractModal({ onClose, firm, trademarks, action, agencySettings, firmContacts = [] }: ContractModalProps) {
     // 1. Parse Initial Data
     // Find similar marks from action full content if possible
     const [similarMarksOptions, setSimilarMarksOptions] = useState<string[]>([]);
@@ -24,44 +26,55 @@ export default function ContractModal({ onClose, firm, trademarks, action, agenc
             const newOptions: string[] = [];
 
             // Extract content from all <li> tags
-            // The email contains the pre-formatted string we want: "MarkName - (AppNo) (ClientMark benzer markası)"
             const listRegex = /<li[^>]*>(.*?)<\/li>/gi;
             const matches = [...content.matchAll(listRegex)];
 
+            // Collect firm's own trademark names to filter them out
+            const firmMarkNames = trademarks.map(t => t.name?.toLowerCase().trim()).filter(Boolean);
+
             matches.forEach(m => {
                 let text = m[1];
-                // Remove HTML tags (like <b>, </b>) to get clean text
                 text = text.replace(/<[^>]+>/g, '');
-                // Decode basic entities
                 text = text.replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&');
 
                 if (text.trim()) {
-                    newOptions.push(text.trim());
+                    // Filter out firm's own trademarks (İzlenen Tüm Markalar section)
+                    const textLower = text.trim().toLowerCase();
+                    const isFirmMark = firmMarkNames.some(name =>
+                        textLower.startsWith(name) || textLower === name
+                    );
+                    if (!isFirmMark) {
+                        newOptions.push(text.trim());
+                    }
                 }
             });
 
-            // Deduplicate
             setSimilarMarksOptions([...new Set(newOptions)]);
         }
-    }, [action]);
+    }, [action, trademarks]);
+
+    // Firma display name
+    const firmDisplayName = firm.type === 'corporate'
+        ? (firm.corporate_title || firm.name)
+        : (firm.individual_name_surname || firm.name);
 
     // 2. Form State
     const [formData, setFormData] = useState<ContractData>({
         // Client
         clientType: firm.type,
-        clientName: firm.type === 'corporate' ? (firm.corporate_title || firm.name) : (firm.individual_name_surname || firm.name),
+        clientName: '',
         clientAddress: (firm.type === 'corporate' ? firm.corporate_address : firm.individual_address)?.replace(/\n/g, ' ') || '',
-        clientTC: firm.individual_tc,
-        clientTaxOffice: firm.corporate_tax_office,
-        clientTaxNumber: firm.corporate_tax_number,
-        clientEmail: firm.email,
-        clientPhone: firm.phone,
+        clientTC: '',
+        clientTaxOffice: firm.type === 'corporate' ? firm.corporate_tax_office : (firm.individual_tax_office || ''),
+        clientTaxNumber: firm.type === 'corporate' ? firm.corporate_tax_number : (firm.individual_tc || ''),
+        clientEmail: '',
+        clientPhone: '',
         clientWeb: firm.web_address || firm.website || '',
-        clientBornDate: firm.individual_born_date || '',
+        clientBornDate: '',
 
         // Transaction
         transactionType: 'YAYIMA İTİRAZ',
-        markName: trademarks.length > 0 ? (trademarks[0].application_no ? `${trademarks[0].name} (${trademarks[0].application_no})` : trademarks[0].name) : '',
+        markName: '',
         markType: '',
         goodsServices: '',
         objectionMarks: '', // User will select from options or type
@@ -82,21 +95,174 @@ export default function ContractModal({ onClose, firm, trademarks, action, agenc
         consultantTitle: 'Operasyon Destek Uzmanı'
     });
 
+    // === Marka Sahipleri Seçim Sistemi ===
+    const [selectedMarkIds, setSelectedMarkIds] = useState<string[]>([]);
+    const [trademarkContactsMap, setTrademarkContactsMap] = useState<Record<string, string[]>>({}); // trademark_id -> contact_id[]
+    const [selectedOwnerIds, setSelectedOwnerIds] = useState<string[]>([]); // contact IDs
+    const [isFirmOwnerSelected, setIsFirmOwnerSelected] = useState(false);
+
     // Helper to format mark name with app no
     const formatMarkName = (name: string, appNo: string | null | undefined) => {
         return appNo ? `${name} (${appNo})` : name;
     };
 
-    // Helper to handle mark toggles (Multi-select)
-    const handleMarkToggle = (mark: string) => {
-        const current = formData.markName ? formData.markName.split(', ').filter(Boolean) : [];
-        let updated;
-        if (current.includes(mark)) {
-            updated = current.filter(m => m !== mark);
-        } else {
-            updated = [...current, mark];
+    // Load trademark contacts when marks are selected
+    useEffect(() => {
+        const loadTrademarkContacts = async () => {
+            const newMap: Record<string, string[]> = {};
+            for (const markId of selectedMarkIds) {
+                if (!trademarkContactsMap[markId]) {
+                    try {
+                        const contacts = await getTrademarkContacts(markId);
+                        newMap[markId] = contacts.map((c: any) => c.id);
+                    } catch {
+                        newMap[markId] = [];
+                    }
+                } else {
+                    newMap[markId] = trademarkContactsMap[markId];
+                }
+            }
+            setTrademarkContactsMap(prev => ({ ...prev, ...newMap }));
+        };
+
+        if (selectedMarkIds.length > 0) {
+            loadTrademarkContacts();
         }
-        handleInputChange('markName', updated.join(', '));
+    }, [selectedMarkIds]);
+
+    // Compute available owners from selected marks
+    const availableOwners = useMemo(() => {
+        const contactIds = new Set<string>();
+        let firmNameFound = false;
+
+        for (const markId of selectedMarkIds) {
+            const tm = trademarks.find(t => t.id === markId);
+            if (!tm) continue;
+
+            // Check if rights_owner contains firm name
+            if (tm.rights_owner && firmDisplayName && tm.rights_owner.includes(firmDisplayName)) {
+                firmNameFound = true;
+            }
+
+            // Add contacts from junction table
+            const tmContactIds = trademarkContactsMap[markId] || [];
+            tmContactIds.forEach(id => contactIds.add(id));
+        }
+
+        const contacts = firmContacts.filter(c => contactIds.has(c.id));
+
+        return { contacts, firmNameFound };
+    }, [selectedMarkIds, trademarkContactsMap, firmContacts, trademarks, firmDisplayName]);
+
+    // Auto-fill form fields when owner selection changes
+    useEffect(() => {
+        const selectedContacts = firmContacts.filter(c => selectedOwnerIds.includes(c.id));
+
+        // Client Name: firma adı + yetkili adları virgülle
+        const names: string[] = [];
+        if (isFirmOwnerSelected && firmDisplayName) names.push(firmDisplayName);
+        selectedContacts.forEach(c => names.push(c.full_name));
+
+        // TC Kimlik No: firma TC (şahıs ise) + kişilerin TC'leri / ile
+        const tcs: string[] = [];
+        if (isFirmOwnerSelected && firm.type === 'individual' && firm.individual_tc) {
+            tcs.push(firm.individual_tc);
+        }
+        selectedContacts.forEach(c => { if (c.tc_no) tcs.push(c.tc_no); });
+        const tcStr = tcs.join(' / ');
+
+        // Doğum Tarihi: firma sahibi (şahıs ise) + kişilerin doğum tarihleri - ile
+        const birthDates: string[] = [];
+        if (isFirmOwnerSelected && firm.type === 'individual' && firm.individual_born_date) {
+            birthDates.push(new Date(firm.individual_born_date).toLocaleDateString('tr-TR'));
+        }
+        selectedContacts.forEach(c => {
+            if (c.birth_date) {
+                birthDates.push(new Date(c.birth_date).toLocaleDateString('tr-TR'));
+            }
+        });
+        const birthStr = birthDates.join(' - ');
+
+        // Telefon: tüm telefonlar / ile (firma + kişiler)
+        const phones: string[] = [];
+        if (isFirmOwnerSelected) {
+            const fp = firm.firm_phones || [];
+            fp.filter(Boolean).forEach((p: string) => phones.push(p));
+            // Fallback to legacy phone
+            if (phones.length === 0 && firm.phone) phones.push(firm.phone);
+        }
+        selectedContacts.forEach(c => {
+            if (c.phones && c.phones.length > 0) {
+                c.phones.filter(Boolean).forEach((p: string) => phones.push(p));
+            }
+        });
+        const phoneStr = phones.join(' / ');
+
+        // E-posta: tüm emailler , ile (firma + kişiler)
+        const emails: string[] = [];
+        if (isFirmOwnerSelected) {
+            const fe = firm.firm_emails || [];
+            fe.filter(Boolean).forEach((e: string) => emails.push(e));
+            // Fallback to legacy email
+            if (emails.length === 0 && firm.email) emails.push(firm.email);
+        }
+        selectedContacts.forEach(c => {
+            if (c.emails && c.emails.length > 0) {
+                c.emails.filter(Boolean).forEach((e: string) => emails.push(e));
+            }
+        });
+        const emailStr = emails.join(', ');
+
+        // Vergi bilgileri: firma sahip seçiliyse firma bilgilerinden
+        const taxOffice = isFirmOwnerSelected
+            ? (firm.type === 'corporate' ? firm.corporate_tax_office : firm.individual_tax_office) || ''
+            : '';
+        const taxNumber = isFirmOwnerSelected
+            ? (firm.type === 'corporate' ? firm.corporate_tax_number : firm.individual_tc) || ''
+            : '';
+
+        setFormData(prev => ({
+            ...prev,
+            clientName: names.join(', '),
+            clientTC: tcStr,
+            clientBornDate: birthStr,
+            clientPhone: phoneStr,
+            clientEmail: emailStr,
+            clientTaxOffice: taxOffice,
+            clientTaxNumber: taxNumber,
+        }));
+    }, [selectedOwnerIds, isFirmOwnerSelected, firmContacts, firm, firmDisplayName]);
+
+    // Handle mark toggles (Multi-select) — now also tracks IDs
+    const handleMarkToggle = (markId: string, markLabel: string) => {
+        const currentLabels = formData.markName ? formData.markName.split(', ').filter(Boolean) : [];
+        let updatedLabels: string[];
+        let updatedIds: string[];
+
+        if (selectedMarkIds.includes(markId)) {
+            updatedIds = selectedMarkIds.filter(id => id !== markId);
+            updatedLabels = currentLabels.filter(m => m !== markLabel);
+        } else {
+            updatedIds = [...selectedMarkIds, markId];
+            updatedLabels = [...currentLabels, markLabel];
+        }
+
+        setSelectedMarkIds(updatedIds);
+        handleInputChange('markName', updatedLabels.join(', '));
+
+        // Clear owner selections if no marks selected
+        if (updatedIds.length === 0) {
+            setSelectedOwnerIds([]);
+            setIsFirmOwnerSelected(false);
+        }
+    };
+
+    const toggleOwner = (contactId: string) => {
+        setSelectedOwnerIds(prev =>
+            prev.includes(contactId)
+                ? prev.filter(id => id !== contactId)
+                : [...prev, contactId]
+        );
     };
 
     const [pdfUrl, setPdfUrl] = useState<string | null>(null);
@@ -106,13 +272,14 @@ export default function ContractModal({ onClose, firm, trademarks, action, agenc
     const [isMailPreviewOpen, setIsMailPreviewOpen] = useState(false);
     const [mailSubject, setMailSubject] = useState('Bülten İtiraz Onay Sözleşmesi Hk.');
     const [isSending, setIsSending] = useState(false);
-    const [emailCC, setEmailCC] = useState<string[]>([]); // New state for CC
+    const [emailCC, setEmailCC] = useState<string[]>([]);
+    const [mailToEmails, setMailToEmails] = useState<string[]>([]);
     const [generatedPdfBlob, setGeneratedPdfBlob] = useState<Blob | null>(null);
 
     // Initial PDF Generation
     useEffect(() => {
         updatePdf();
-    }, []); // Run once on mount, then on manual update or debounced? Let's use manual "Güncelle" button or effect on data change
+    }, []); // Run once on mount
 
     // Debounced PDF update effect
     useEffect(() => {
@@ -127,9 +294,6 @@ export default function ContractModal({ onClose, firm, trademarks, action, agenc
         try {
             const url = await generateContractPDF(formData);
             setPdfUrl(url.toString());
-
-            // Allow revoke? Browser handles blob url gc usually, but good practice.
-            // window.URL.revokeObjectURL(oldUrl); 
         } catch (e) {
             console.error(e);
             toast.error('PDF oluşturulamadı');
@@ -156,7 +320,27 @@ export default function ContractModal({ onClose, firm, trademarks, action, agenc
             const response = await fetch(pdfUrl);
             const blob = await response.blob();
             setGeneratedPdfBlob(blob);
-            setEmailCC([]); // Reset CC
+            setEmailCC([]);
+            // Collect TO emails from selected owners
+            const toEmails: string[] = [];
+            if (isFirmOwnerSelected) {
+                const fe = firm.firm_emails || [];
+                fe.filter(Boolean).forEach((e: string) => {
+                    if (!toEmails.includes(e)) toEmails.push(e);
+                });
+            }
+            firmContacts
+                .filter(c => selectedOwnerIds.includes(c.id))
+                .forEach(c => {
+                    if (c.emails && c.emails.length > 0) {
+                        c.emails.filter(Boolean).forEach((e: string) => {
+                            if (!toEmails.includes(e)) toEmails.push(e);
+                        });
+                    }
+                });
+            // Fallback to legacy firm email if nothing selected
+            if (toEmails.length === 0 && firm.email) toEmails.push(firm.email);
+            setMailToEmails(toEmails);
             setIsMailPreviewOpen(true);
         }
     };
@@ -201,13 +385,13 @@ export default function ContractModal({ onClose, firm, trademarks, action, agenc
                     mailContent,
                     mailSubject,
                     [{ filename: `Sözleşme - ${formData.clientName}.pdf`, content: base64Content }],
-                    emailCC
+                    emailCC,
+                    mailToEmails
                 );
 
                 if (result.success) {
                     toast.success(result.message);
                     onClose();
-                    // trigger refresh?
                     window.location.reload();
                 } else {
                     toast.error(result.message);
@@ -234,8 +418,12 @@ export default function ContractModal({ onClose, firm, trademarks, action, agenc
                     </div>
                     <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
                         <div>
-                            <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Kime</label>
-                            <div className="p-2 bg-gray-50 rounded border text-sm">{firm.email}</div>
+                            <MultiEmailInput
+                                value={mailToEmails}
+                                onChange={setMailToEmails}
+                                label="Kime"
+                                placeholder="E-posta ekleyin..."
+                            />
                         </div>
                         <div>
                             <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Konu</label>
@@ -255,7 +443,7 @@ export default function ContractModal({ onClose, firm, trademarks, action, agenc
                                 <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">İçerik</label>
                                 <div className="p-4 bg-gray-50 border rounded text-sm min-h-[100px] space-y-4 font-sans text-gray-800">
                                     <div>Merhabalar,</div>
-                                    <div>Hazırlanan sözleşmemiz ekte yer almaktadır. Sözleşme onayı akabinde fatura işlemlerine geçilecektir. Bu maile "<b>tümünü yanıtla</b>" ile geri dönüş yapıp onay vermenizi rica ederiz.</div>
+                                    <div>Hazırlanan sözleşmemiz ekte yer almaktadır. Sözleşme onayı akabinde fatura işlemlerine geçilecektir. Bu maile &quot;<b>tümünü yanıtla</b>&quot; ile geri dönüş yapıp onay vermenizi rica ederiz.</div>
                                     <div>
                                         Teşekkürler.<br />
                                         Saygılarımla
@@ -308,7 +496,7 @@ export default function ContractModal({ onClose, firm, trademarks, action, agenc
                                 <FormInput label="Adres" value={formData.clientAddress || ''} onChange={(v) => handleInputChange('clientAddress', v)} multiline />
                                 <div className="grid grid-cols-2 gap-2">
                                     <FormInput label="TC Kimlik No" value={formData.clientTC || ''} onChange={(v) => handleInputChange('clientTC', v)} />
-                                    <FormInput label="Doğum Tarihi" value={formData.clientBornDate || ''} onChange={(v) => handleInputChange('clientBornDate', v)} type="date" />
+                                    <FormInput label="Doğum Tarihi" value={formData.clientBornDate || ''} onChange={(v) => handleInputChange('clientBornDate', v)} />
                                 </div>
                                 <div className="grid grid-cols-2 gap-2">
                                     <FormInput label="Telefon" value={formData.clientPhone || ''} onChange={(v) => handleInputChange('clientPhone', v)} />
@@ -336,8 +524,8 @@ export default function ContractModal({ onClose, firm, trademarks, action, agenc
                                             <label key={tm.id} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-gray-50 p-1 rounded">
                                                 <input
                                                     type="checkbox"
-                                                    checked={formData.markName.split(', ').includes(label)}
-                                                    onChange={() => handleMarkToggle(label)}
+                                                    checked={selectedMarkIds.includes(tm.id)}
+                                                    onChange={() => handleMarkToggle(tm.id, label)}
                                                     className="rounded text-blue-600 focus:ring-blue-500 h-4 w-4"
                                                 />
                                                 <span className="text-gray-900 font-medium">{label}</span>
@@ -347,6 +535,61 @@ export default function ContractModal({ onClose, firm, trademarks, action, agenc
                                 </div>
                                 <div className="text-[10px] text-gray-400 mt-1">Seçilen Markalar: {formData.markName}</div>
                             </div>
+
+                            {/* Marka Sahipleri Seçimi — marka seçildikten sonra görünür */}
+                            {selectedMarkIds.length > 0 && (availableOwners.contacts.length > 0 || availableOwners.firmNameFound) && (
+                                <div>
+                                    <label className="block text-xs font-semibold text-white mb-1 flex items-center gap-1">
+                                        <LucideUsers size={12} />
+                                        Marka Sahipleri (Firma / Şahıs Seçin)
+                                        {(selectedOwnerIds.length + (isFirmOwnerSelected ? 1 : 0)) > 0 && (
+                                            <span className="text-[10px] bg-blue-400 text-white px-1.5 py-0.5 rounded-full ml-1">
+                                                {selectedOwnerIds.length + (isFirmOwnerSelected ? 1 : 0)} seçili
+                                            </span>
+                                        )}
+                                    </label>
+                                    <div className="border border-gray-300 rounded-md p-2 bg-white space-y-1">
+                                        {/* Firma adı */}
+                                        {availableOwners.firmNameFound && (
+                                            <>
+                                                <label className={`flex items-center gap-2 text-xs cursor-pointer p-1.5 rounded transition-colors ${isFirmOwnerSelected ? 'bg-indigo-50 border border-indigo-200' : 'hover:bg-gray-50 border border-transparent'}`}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isFirmOwnerSelected}
+                                                        onChange={() => setIsFirmOwnerSelected(prev => !prev)}
+                                                        className="rounded text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                                                    />
+                                                    <div className="flex-1">
+                                                        <span className="text-gray-900 font-medium">{firmDisplayName}</span>
+                                                        <span className="ml-1.5 text-[9px] font-semibold uppercase bg-indigo-100 text-indigo-700 px-1 py-0.5 rounded">
+                                                            {firm.type === 'corporate' ? 'Tüzel' : 'Firma'}
+                                                        </span>
+                                                    </div>
+                                                </label>
+                                                {availableOwners.contacts.length > 0 && <div className="border-t border-gray-200 my-0.5"></div>}
+                                            </>
+                                        )}
+                                        {/* Yetkili kişiler */}
+                                        {availableOwners.contacts.map(contact => (
+                                            <label
+                                                key={contact.id}
+                                                className={`flex items-center gap-2 text-xs cursor-pointer p-1.5 rounded transition-colors ${selectedOwnerIds.includes(contact.id) ? 'bg-blue-50 border border-blue-200' : 'hover:bg-gray-50 border border-transparent'}`}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedOwnerIds.includes(contact.id)}
+                                                    onChange={() => toggleOwner(contact.id)}
+                                                    className="rounded text-blue-600 focus:ring-blue-500 h-4 w-4"
+                                                />
+                                                <div className="flex-1">
+                                                    <span className="text-gray-900 font-medium">{contact.full_name}</span>
+                                                    {contact.tc_no && <span className="text-gray-400 ml-1 text-[10px]">TC: {contact.tc_no}</span>}
+                                                </div>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
                             <FormInput label="Marka Tipi" value={formData.markType} onChange={(v) => handleInputChange('markType', v)} />
 
