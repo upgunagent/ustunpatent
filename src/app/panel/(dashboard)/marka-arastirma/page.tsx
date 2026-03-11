@@ -302,7 +302,7 @@ export default function TrademarkSearchPage() {
         }
     };
 
-    const handleDetail = async (item: any) => {
+    const handleDetail = async (item: any, rowIndex: number) => {
         if (!sessionId) {
             setError("Oturum bulunamadı. Lütfen önce arama yapın.");
             return;
@@ -322,6 +322,7 @@ export default function TrademarkSearchPage() {
                     sessionId: sessionId,
                     params: {
                         applicationNo: item.applicationNo,
+                        rowIndex: rowIndex,
                         sessionId: sessionId
                     }
                 })
@@ -570,7 +571,7 @@ export default function TrademarkSearchPage() {
                                         </td>
                                         <td className="px-4 py-4 text-center">
                                             <button
-                                                onClick={() => handleDetail(item)}
+                                                onClick={() => handleDetail(item, idx)}
                                                 disabled={detailLoading}
                                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded hover:bg-red-700 transition-colors shadow-sm disabled:opacity-50"
                                             >

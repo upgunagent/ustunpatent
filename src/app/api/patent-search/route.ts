@@ -496,52 +496,114 @@ export async function POST(req: NextRequest) {
 
             // Scroll to top first
             await page.evaluate(() => window.scrollTo(0, 0));
-            await new Promise(r => setTimeout(r, 500));
+            await new Promise(r => setTimeout(r, 1000));
 
-            // Find the row with this application number and click its DETAY button
-            const detayClicked = await page.evaluate((appNo: string) => {
-                const rows = Array.from(document.querySelectorAll('tr.MuiTableRow-root, table tbody tr'));
-
-                for (const row of rows) {
-                    const cells = row.querySelectorAll('td');
-                    if (cells.length === 0) continue;
-
-                    // Check if this row has the matching application number
-                    let rowAppNo = '';
-                    const appNoCell = row.querySelector('td[role="applicationNo"]');
-                    if (appNoCell) {
-                        rowAppNo = appNoCell.textContent?.trim() || '';
-                    } else if (cells[1]) {
-                        rowAppNo = cells[1].textContent?.trim() || '';
-                    }
-
-                    // Normalize comparison (remove spaces, slashes)
-                    const normalize = (s: string) => s.replace(/[\s\/]/g, '');
-                    if (normalize(rowAppNo) === normalize(appNo)) {
-                        // Find the DETAY button in this row
-                        const buttons = row.querySelectorAll('button');
-                        for (const btn of buttons) {
-                            const text = btn.textContent?.trim().toUpperCase() || '';
-                            if (text.includes('DETAY')) {
-                                // Scroll row into view
-                                row.scrollIntoView({ behavior: 'instant', block: 'center' });
-                                (btn as HTMLElement).click();
-                                return true;
+            // Strategy 1: Use _actions-N ID selector (most reliable)
+            // Strategy 2: Search by applicationNo text in cells
+            // Strategy 3: Use generic button search
+            const detayClicked = await page.evaluate((appNo: string, idx: number) => {
+                // Strategy 1: Try by ID-based action cells
+                const actionCells = document.querySelectorAll('td[id^="_actions-"]');
+                for (const cell of actionCells) {
+                    const btn = cell.querySelector('button');
+                    if (btn) {
+                        const text = btn.textContent?.trim().toUpperCase() || '';
+                        if (text.includes('DETAY')) {
+                            // Verify this is the right row by checking applicationNo in same row
+                            const row = cell.closest('tr');
+                            if (row) {
+                                const appNoCell = row.querySelector('td[id^="applicationNo-"]');
+                                const cellText = appNoCell?.textContent?.trim() || '';
+                                const normalize = (s: string) => s.replace(/[\s\/]/g, '');
+                                if (normalize(cellText) === normalize(appNo)) {
+                                    row.scrollIntoView({ behavior: 'instant', block: 'center' });
+                                    btn.click();
+                                    return 'found-by-id';
+                                }
                             }
                         }
                     }
                 }
-                return false;
-            }, applicationNo);
+
+                // Strategy 2: Fallback - search all rows for matching applicationNo
+                const rows = Array.from(document.querySelectorAll('tr'));
+                for (const row of rows) {
+                    const cells = row.querySelectorAll('td');
+                    if (cells.length < 3) continue;
+
+                    // Check each cell for matching application number
+                    let found = false;
+                    for (const cell of cells) {
+                        const cellText = cell.textContent?.trim() || '';
+                        const normalize = (s: string) => s.replace(/[\s\/]/g, '');
+                        if (normalize(cellText) === normalize(appNo)) {
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if (found) {
+                        // Find DETAY button in this row
+                        const buttons = row.querySelectorAll('button');
+                        for (const btn of buttons) {
+                            const btnText = btn.textContent?.trim().toUpperCase() || '';
+                            if (btnText.includes('DETAY')) {
+                                row.scrollIntoView({ behavior: 'instant', block: 'center' });
+                                btn.click();
+                                return 'found-by-text';
+                            }
+                        }
+                    }
+                }
+
+                // Strategy 3: If only one result, click the first DETAY button
+                const allDetayBtns = Array.from(document.querySelectorAll('button')).filter(
+                    b => b.textContent?.trim().toUpperCase().includes('DETAY')
+                );
+                if (allDetayBtns.length === 1) {
+                    allDetayBtns[0].scrollIntoView({ behavior: 'instant', block: 'center' });
+                    allDetayBtns[0].click();
+                    return 'found-single';
+                }
+
+                // Strategy 4: Use rowIndex if provided
+                if (idx >= 0 && allDetayBtns.length > idx) {
+                    allDetayBtns[idx].scrollIntoView({ behavior: 'instant', block: 'center' });
+                    allDetayBtns[idx].click();
+                    return 'found-by-index';
+                }
+
+                return null;
+            }, applicationNo, rowIndex || 0);
 
             if (!detayClicked) {
-                throw new Error(`Başvuru No ${applicationNo} için DETAY butonu bulunamadı. Lütfen önce arama yapın.`);
+                // Debug: log what's on the page
+                const pageInfo = await page.evaluate(() => {
+                    const url = window.location.href;
+                    const actionCells = document.querySelectorAll('td[id^="_actions-"]').length;
+                    const allButtons = Array.from(document.querySelectorAll('button')).map(b => b.textContent?.trim()).filter(Boolean);
+                    const tableRows = document.querySelectorAll('tr').length;
+                    return { url, actionCells, buttonCount: allButtons.length, tableRows, sampleButtons: allButtons.slice(0, 10) };
+                });
+                log(`Debug page state: ${JSON.stringify(pageInfo)}`);
+                throw new Error(`Başvuru No ${applicationNo} için DETAY butonu bulunamadı. Sayfa üzerinde ${pageInfo.tableRows} satır, ${pageInfo.actionCells} aksiyon hücresi var.`);
             }
 
-            log("DETAY button clicked, waiting for popup...");
-            await new Promise(r => setTimeout(r, 3000));
+            log(`DETAY button clicked via: ${detayClicked}. Waiting for popup...`);
 
-            // Scrape detail popup content
+            // Wait for the dialog/modal to appear
+            try {
+                await page.waitForFunction(() => {
+                    return document.querySelector('[role="dialog"], [role="presentation"], .MuiDialog-root, .MuiModal-root, .MuiCardContent-root') !== null;
+                }, { timeout: 10000 });
+                log("Detail popup detected in DOM.");
+            } catch (e) {
+                log("Popup detection timed out, continuing with scraping attempt...");
+            }
+
+            await new Promise(r => setTimeout(r, 2000));
+
+            // Scrape detail popup content using FIELDSET/LEGEND structure
             const detailData = await page.evaluate(() => {
                 const result: any = {
                     markaBilgileri: {} as Record<string, string>,
@@ -549,80 +611,82 @@ export async function POST(req: NextRequest) {
                     islemBilgileri: [] as { tarih: string; tebligTarihi: string; islem: string; aciklama: string }[]
                 };
 
-                // Find the popup/dialog
-                const dialog = document.querySelector('[role="dialog"], [role="presentation"], .MuiDialog-root, .MuiModal-root');
+                // Find the popup container
+                const dialog = document.querySelector('[role="presentation"], [role="dialog"], .MuiDialog-root, .MuiModal-root');
                 if (!dialog) return result;
 
-                const dialogContent = dialog.querySelector('.MuiDialogContent-root, .MuiCardContent-root, [class*="content"]') || dialog;
+                const contentArea = dialog.querySelector('.MuiCardContent-root, .MuiDialogContent-root') || dialog;
 
-                // ---- MARKA BİLGİLERİ ----
-                // Look for table with key-value pairs
-                const tables = dialogContent.querySelectorAll('table');
-                for (const table of tables) {
-                    const rows = table.querySelectorAll('tr');
-                    for (const row of rows) {
-                        const cells = row.querySelectorAll('td, th');
-                        if (cells.length >= 2) {
-                            const key = cells[0].textContent?.trim() || '';
-                            const value = cells[1].textContent?.trim() || '';
-                            if (key && value && key.length < 50) {
-                                result.markaBilgileri[key] = value;
-                            }
-                            // Some rows have 4 cells (2 key-value pairs)
-                            if (cells.length >= 4) {
-                                const key2 = cells[2].textContent?.trim() || '';
-                                const value2 = cells[3].textContent?.trim() || '';
-                                if (key2 && value2 && key2.length < 50) {
-                                    result.markaBilgileri[key2] = value2;
+                // Find all fieldset sections
+                const fieldsets = contentArea.querySelectorAll('fieldset');
+
+                for (const fieldset of fieldsets) {
+                    const legend = fieldset.querySelector('legend');
+                    const sectionTitle = legend?.textContent?.trim() || '';
+
+                    if (sectionTitle.includes('Marka Bilgileri')) {
+                        // ---- MARKA BİLGİLERİ ----
+                        const table = fieldset.querySelector('table');
+                        if (table) {
+                            const rows = table.querySelectorAll('tr');
+                            for (const row of rows) {
+                                const cells = row.querySelectorAll('td, th');
+                                // Handle rows with 2 cells (key-value)
+                                if (cells.length >= 2) {
+                                    const key = cells[0].textContent?.trim() || '';
+                                    const value = cells[1].textContent?.trim() || '';
+                                    if (key && key.length < 60 && !key.includes('Marka Bilgileri')) {
+                                        result.markaBilgileri[key] = value;
+                                    }
+                                    // Handle rows with 4 cells (2 key-value pairs side by side)
+                                    if (cells.length >= 4) {
+                                        const key2 = cells[2].textContent?.trim() || '';
+                                        const value2 = cells[3].textContent?.trim() || '';
+                                        if (key2 && key2.length < 60) {
+                                            result.markaBilgileri[key2] = value2;
+                                        }
+                                    }
                                 }
                             }
                         }
-                    }
-                }
 
-                // ---- MAL VE HİZMET BİLGİLERİ ----
-                // Look for the section with class descriptions
-                const allText = dialogContent.innerHTML;
-                const malHizmetSectionIndex = allText.indexOf('Mal ve Hizmet');
-                if (malHizmetSectionIndex > -1) {
-                    // Find tables after "Mal ve Hizmet"
-                    const sections = dialogContent.querySelectorAll('table, [class*="TabPanel"], [role="tabpanel"]');
-                    for (const section of sections) {
-                        const sectionText = section.textContent || '';
-                        if (sectionText.includes('Sınıf') || sectionText.includes('Mal ve Hizmet')) {
-                            const sRows = section.querySelectorAll('tr');
-                            for (const sRow of sRows) {
-                                const sCells = sRow.querySelectorAll('td');
-                                if (sCells.length >= 2) {
-                                    const sinif = sCells[0].textContent?.trim() || '';
-                                    const aciklama = sCells[1].textContent?.trim() || '';
+                        // Also try to get logo image
+                        const img = fieldset.querySelector('img');
+                        if (img && img.src) {
+                            result.markaBilgileri['Şekil'] = img.src;
+                        }
+
+                    } else if (sectionTitle.includes('Mal ve Hizmet')) {
+                        // ---- MAL VE HİZMET BİLGİLERİ ----
+                        const table = fieldset.querySelector('table');
+                        if (table) {
+                            const rows = table.querySelectorAll('tbody tr, tr');
+                            for (const row of rows) {
+                                const cells = row.querySelectorAll('td');
+                                if (cells.length >= 2) {
+                                    const sinif = cells[0].textContent?.trim() || '';
+                                    const aciklama = cells[1].textContent?.trim() || '';
+                                    // Class number is typically a number (25, 35, etc.)
                                     if (sinif && aciklama && /^\d+$/.test(sinif)) {
                                         result.malHizmetBilgileri.push({ sinif, aciklama });
                                     }
                                 }
                             }
                         }
-                    }
-                }
 
-                // ---- BAŞVURU İŞLEM BİLGİLERİ ----
-                const islemSectionIndex = allText.indexOf('Başvuru İşlem');
-                if (islemSectionIndex > -1) {
-                    // Find the last table(s) which should be the process history
-                    const allTables = Array.from(dialogContent.querySelectorAll('table'));
-                    // Process history table is typically the last one
-                    for (const table of allTables) {
-                        const headerText = table.textContent || '';
-                        if (headerText.includes('Tarih') && headerText.includes('İşlem')) {
-                            const tRows = table.querySelectorAll('tbody tr, tr');
-                            for (const tRow of tRows) {
-                                const tCells = tRow.querySelectorAll('td');
-                                if (tCells.length >= 3) {
+                    } else if (sectionTitle.includes('İşlem Bilgileri') || sectionTitle.includes('Başvuru İşlem')) {
+                        // ---- BAŞVURU İŞLEM BİLGİLERİ ----
+                        const tables = fieldset.querySelectorAll('table');
+                        for (const table of tables) {
+                            const rows = table.querySelectorAll('tbody tr, tr');
+                            for (const row of rows) {
+                                const cells = row.querySelectorAll('td');
+                                if (cells.length >= 3) {
                                     result.islemBilgileri.push({
-                                        tarih: tCells[0].textContent?.trim() || '-',
-                                        tebligTarihi: tCells[1].textContent?.trim() || '-',
-                                        islem: tCells[2].textContent?.trim() || '-',
-                                        aciklama: tCells.length >= 4 ? tCells[3].textContent?.trim() || '-' : '-'
+                                        tarih: cells[0].textContent?.trim() || '-',
+                                        tebligTarihi: cells[1].textContent?.trim() || '-',
+                                        islem: cells[2].textContent?.trim() || '-',
+                                        aciklama: cells.length >= 4 ? cells[3].textContent?.trim() || '-' : '-'
                                     });
                                 }
                             }
@@ -630,46 +694,81 @@ export async function POST(req: NextRequest) {
                     }
                 }
 
-                // Also try to get the logo/image from the modal
-                const modalImg = dialog.querySelector('img');
-                if (modalImg && modalImg.src) {
-                    result.markaBilgileri['Şekil'] = modalImg.src;
+                // Fallback: If no fieldsets found, try generic table scraping
+                if (Object.keys(result.markaBilgileri).length === 0 && fieldsets.length === 0) {
+                    const allTables = contentArea.querySelectorAll('table');
+                    for (const table of allTables) {
+                        const rows = table.querySelectorAll('tr');
+                        for (const row of rows) {
+                            const cells = row.querySelectorAll('td, th');
+                            if (cells.length >= 2) {
+                                const key = cells[0].textContent?.trim() || '';
+                                const value = cells[1].textContent?.trim() || '';
+                                if (key && value && key.length < 60) {
+                                    result.markaBilgileri[key] = value;
+                                }
+                                if (cells.length >= 4) {
+                                    const key2 = cells[2].textContent?.trim() || '';
+                                    const value2 = cells[3].textContent?.trim() || '';
+                                    if (key2 && value2 && key2.length < 60) {
+                                        result.markaBilgileri[key2] = value2;
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
                 return result;
             });
 
-            log(`Detail scraped: ${Object.keys(detailData.markaBilgileri).length} fields, ${detailData.malHizmetBilgileri.length} classes, ${detailData.islemBilgileri.length} process steps`);
+            log(`Detail scraped: ${Object.keys(detailData.markaBilgileri).length} marka fields, ${detailData.malHizmetBilgileri.length} classes, ${detailData.islemBilgileri.length} process steps`);
 
             // Close the popup
-            await page.evaluate(() => {
-                // Try multiple close strategies
-                const closeBtn = document.querySelector('[role="dialog"] button[aria-label="close"], [role="presentation"] button svg[data-testid="CloseIcon"]');
-                if (closeBtn) {
-                    const btn = closeBtn.closest('button') || closeBtn;
-                    (btn as HTMLElement).click();
-                    return;
-                }
-
-                // Find X or close button in dialog
-                const dialogButtons = document.querySelectorAll('[role="dialog"] button, [role="presentation"] button, .MuiDialog-root button');
-                for (const btn of dialogButtons) {
-                    const text = btn.textContent?.trim() || '';
-                    if (text === '×' || text === 'X' || text === 'x' || text === '') {
-                        const svg = btn.querySelector('svg');
-                        if (svg || text === '×' || text === 'X') {
-                            (btn as HTMLElement).click();
-                            return;
+            try {
+                await page.evaluate(() => {
+                    // Strategy 1: Find close button by SVG icon
+                    const svgIcons = document.querySelectorAll('svg[data-testid="CloseIcon"], svg.MuiSvgIcon-root');
+                    for (const icon of svgIcons) {
+                        const btn = icon.closest('button');
+                        if (btn) {
+                            const dialog = btn.closest('[role="presentation"], [role="dialog"], .MuiDialog-root, .MuiModal-root');
+                            if (dialog) {
+                                btn.click();
+                                return;
+                            }
                         }
                     }
-                }
 
-                // Fallback: press Escape
-                document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
-            });
+                    // Strategy 2: Find MuiIconButton close button in dialog
+                    const dialogBtns = document.querySelectorAll('[role="presentation"] button, [role="dialog"] button, .MuiDialog-root button');
+                    for (const btn of dialogBtns) {
+                        const classes = btn.className || '';
+                        if (classes.includes('IconButton') || btn.querySelector('svg')) {
+                            // Likely the close button (usually top-right)
+                            const rect = (btn as HTMLElement).getBoundingClientRect();
+                            if (rect.right > 600 && rect.top < 100) { // Top-right position
+                                (btn as HTMLElement).click();
+                                return;
+                            }
+                        }
+                    }
 
-            await new Promise(r => setTimeout(r, 1000));
-            log("Detail popup closed.");
+                    // Strategy 3: Press Escape
+                    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
+
+                    // Strategy 4: Click backdrop
+                    const backdrop = document.querySelector('.MuiBackdrop-root, [class*="backdrop"]');
+                    if (backdrop) (backdrop as HTMLElement).click();
+                });
+
+                // Also try keyboard Escape via Puppeteer
+                // await page.keyboard.press('Escape');
+                await new Promise(r => setTimeout(r, 1000));
+                log("Detail popup close attempted.");
+            } catch (e: any) {
+                log(`Popup close warning: ${e.message}`);
+            }
 
             GlobalSession.update(globalSessionId);
 
