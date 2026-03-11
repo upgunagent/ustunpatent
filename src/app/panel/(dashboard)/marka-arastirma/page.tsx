@@ -323,6 +323,7 @@ export default function TrademarkSearchPage() {
                     params: {
                         applicationNo: item.applicationNo,
                         rowIndex: rowIndex,
+                        searchText: searchParams.searchText,
                         sessionId: sessionId
                     }
                 })

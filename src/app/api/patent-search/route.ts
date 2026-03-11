@@ -560,92 +560,118 @@ export async function POST(req: NextRequest) {
         // ACTION: GET DETAIL
         // ========================
         } else if (action === 'get_detail') {
-            const { applicationNo, rowIndex } = params;
-            log(`Detail Action: applicationNo=${applicationNo}, rowIndex=${rowIndex}`);
+            const { applicationNo, rowIndex, searchText } = params;
+            log(`Detail Action: applicationNo=${applicationNo}, rowIndex=${rowIndex}, searchText=${searchText}`);
 
             if (!applicationNo) throw new Error("Başvuru numarası belirtilmedi.");
 
-            // Scroll to top first
-            await page.evaluate(() => window.scrollTo(0, 0));
-            await new Promise(r => setTimeout(r, 1000));
+            // Helper function to find and click DETAY button
+            const tryClickDetay = async (appNo: string, idx: number): Promise<string | null> => {
+                await page!.evaluate(() => window.scrollTo(0, 0));
+                await new Promise(r => setTimeout(r, 500));
 
-            // Strategy 1: Use _actions-N ID selector (most reliable)
-            // Strategy 2: Search by applicationNo text in cells
-            // Strategy 3: Use generic button search
-            const detayClicked = await page.evaluate((appNo: string, idx: number) => {
-                // Strategy 1: Try by ID-based action cells
-                const actionCells = document.querySelectorAll('td[id^="_actions-"]');
-                for (const cell of actionCells) {
-                    const btn = cell.querySelector('button');
-                    if (btn) {
-                        const text = btn.textContent?.trim().toUpperCase() || '';
-                        if (text.includes('DETAY')) {
-                            // Verify this is the right row by checking applicationNo in same row
-                            const row = cell.closest('tr');
-                            if (row) {
-                                const appNoCell = row.querySelector('td[id^="applicationNo-"]');
-                                const cellText = appNoCell?.textContent?.trim() || '';
-                                const normalize = (s: string) => s.replace(/[\s\/]/g, '');
-                                if (normalize(cellText) === normalize(appNo)) {
-                                    row.scrollIntoView({ behavior: 'instant', block: 'center' });
-                                    btn.click();
-                                    return 'found-by-id';
+                return await page!.evaluate((appNo: string, idx: number) => {
+                    // Strategy 1: Try by ID-based action cells
+                    const actionCells = document.querySelectorAll('td[id^="_actions-"]');
+                    for (const cell of actionCells) {
+                        const btn = cell.querySelector('button');
+                        if (btn) {
+                            const text = btn.textContent?.trim().toUpperCase() || '';
+                            if (text.includes('DETAY')) {
+                                const row = cell.closest('tr');
+                                if (row) {
+                                    const appNoCell = row.querySelector('td[id^="applicationNo-"]');
+                                    const cellText = appNoCell?.textContent?.trim() || '';
+                                    const normalize = (s: string) => s.replace(/[\s\/]/g, '');
+                                    if (normalize(cellText) === normalize(appNo)) {
+                                        row.scrollIntoView({ behavior: 'instant', block: 'center' });
+                                        btn.click();
+                                        return 'found-by-id';
+                                    }
                                 }
                             }
                         }
                     }
-                }
 
-                // Strategy 2: Fallback - search all rows for matching applicationNo
-                const rows = Array.from(document.querySelectorAll('tr'));
-                for (const row of rows) {
-                    const cells = row.querySelectorAll('td');
-                    if (cells.length < 3) continue;
-
-                    // Check each cell for matching application number
-                    let found = false;
-                    for (const cell of cells) {
-                        const cellText = cell.textContent?.trim() || '';
-                        const normalize = (s: string) => s.replace(/[\s\/]/g, '');
-                        if (normalize(cellText) === normalize(appNo)) {
-                            found = true;
-                            break;
+                    // Strategy 2: Search all rows for matching applicationNo
+                    const rows = Array.from(document.querySelectorAll('tr'));
+                    for (const row of rows) {
+                        const cells = row.querySelectorAll('td');
+                        if (cells.length < 3) continue;
+                        let found = false;
+                        for (const cell of cells) {
+                            const cellText = cell.textContent?.trim() || '';
+                            const normalize = (s: string) => s.replace(/[\s\/]/g, '');
+                            if (normalize(cellText) === normalize(appNo)) { found = true; break; }
                         }
-                    }
-
-                    if (found) {
-                        // Find DETAY button in this row
-                        const buttons = row.querySelectorAll('button');
-                        for (const btn of buttons) {
-                            const btnText = btn.textContent?.trim().toUpperCase() || '';
-                            if (btnText.includes('DETAY')) {
-                                row.scrollIntoView({ behavior: 'instant', block: 'center' });
-                                btn.click();
-                                return 'found-by-text';
+                        if (found) {
+                            const buttons = row.querySelectorAll('button');
+                            for (const btn of buttons) {
+                                if (btn.textContent?.trim().toUpperCase().includes('DETAY')) {
+                                    row.scrollIntoView({ behavior: 'instant', block: 'center' });
+                                    btn.click();
+                                    return 'found-by-text';
+                                }
                             }
                         }
                     }
-                }
 
-                // Strategy 3: If only one result, click the first DETAY button
-                const allDetayBtns = Array.from(document.querySelectorAll('button')).filter(
-                    b => b.textContent?.trim().toUpperCase().includes('DETAY')
-                );
-                if (allDetayBtns.length === 1) {
-                    allDetayBtns[0].scrollIntoView({ behavior: 'instant', block: 'center' });
-                    allDetayBtns[0].click();
-                    return 'found-single';
-                }
+                    // Strategy 3: Single result
+                    const allDetayBtns = Array.from(document.querySelectorAll('button')).filter(
+                        b => b.textContent?.trim().toUpperCase().includes('DETAY')
+                    );
+                    if (allDetayBtns.length === 1) {
+                        allDetayBtns[0].scrollIntoView({ behavior: 'instant', block: 'center' });
+                        allDetayBtns[0].click();
+                        return 'found-single';
+                    }
 
-                // Strategy 4: Use rowIndex if provided
-                if (idx >= 0 && allDetayBtns.length > idx) {
-                    allDetayBtns[idx].scrollIntoView({ behavior: 'instant', block: 'center' });
-                    allDetayBtns[idx].click();
-                    return 'found-by-index';
-                }
+                    // Strategy 4: Use rowIndex
+                    if (idx >= 0 && allDetayBtns.length > idx) {
+                        allDetayBtns[idx].scrollIntoView({ behavior: 'instant', block: 'center' });
+                        allDetayBtns[idx].click();
+                        return 'found-by-index';
+                    }
 
-                return null;
-            }, applicationNo, rowIndex || 0);
+                    return null;
+                }, appNo, idx);
+            };
+
+            // First attempt to click DETAY
+            let detayClicked = await tryClickDetay(applicationNo, rowIndex || 0);
+
+            // If DETAY not found and we have searchText, re-do the search and try again
+            if (!detayClicked && searchText) {
+                log(`DETAY not found on current page. Re-searching for: ${searchText}`);
+                
+                // Navigate to search page
+                try {
+                    await page.goto('https://www.turkpatent.gov.tr/arastirma-yap?form=trademark', { waitUntil: 'domcontentloaded', timeout: 60000 });
+                    await dismissPopup(page, log);
+                    
+                    // Do the search
+                    await findAndTypeSearchInput(page, searchText, log);
+                    await clickSearchButton(page, log);
+                    
+                    // Wait for results
+                    await page.waitForFunction(() => {
+                        const rows = document.querySelectorAll('tr.MuiTableRow-root, table tbody tr');
+                        return rows.length > 0;
+                    }, { timeout: 30000 });
+                    
+                    log("Re-search completed. Waiting for results to stabilize...");
+                    await new Promise(r => setTimeout(r, 2000));
+
+                    // Try clicking DETAY again
+                    detayClicked = await tryClickDetay(applicationNo, rowIndex || 0);
+                    
+                    if (detayClicked) {
+                        log(`DETAY found after re-search via: ${detayClicked}`);
+                    }
+                } catch (reSearchErr: any) {
+                    log(`Re-search failed: ${reSearchErr.message}`);
+                }
+            }
 
             if (!detayClicked) {
                 // Debug: log what's on the page
