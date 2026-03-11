@@ -330,10 +330,22 @@ export default function TrademarkSearchPage() {
             const data = await res.json();
 
             if (data.success && data.detail) {
+                // Debug: log what we got
+                if (data.debugLogs) {
+                    console.log('=== DETAIL DEBUG LOGS ===');
+                    data.debugLogs.forEach((l: string) => console.log(l));
+                    console.log('=== END DEBUG ===');
+                }
+                console.log('Detail data received:', JSON.stringify(data.detail).substring(0, 500));
                 setDetailData(data.detail);
                 // Update session ID if refreshed
                 if (data.sessionId) setSessionId(data.sessionId);
             } else {
+                if (data.debugLogs) {
+                    console.log('=== DETAIL ERROR DEBUG LOGS ===');
+                    data.debugLogs.forEach((l: string) => console.log(l));
+                    console.log('=== END DEBUG ===');
+                }
                 setError(data.error || "Detay bilgisi alınamadı.");
                 setIsDetailOpen(false);
             }
