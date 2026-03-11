@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { BulletinMark } from '@/components/bulletins/BulletinTable';
 
-export async function searchBulletinMarks(markName: string) {
+export async function searchBulletinMarks(markName: string, bulletinNo?: string) {
     if (!markName) return [];
 
     const supabase = await createClient();
@@ -13,15 +13,23 @@ export async function searchBulletinMarks(markName: string) {
     let hasMore = true;
     let batchOffset = 0;
     const BATCH_SIZE = 1000;
-    const SAFETY_LIMIT = 20000;
+    const SAFETY_LIMIT = 10000;
 
     try {
         while (hasMore) {
-            const { data, error } = await supabase
+            let query = supabase
                 .from('bulletin_marks')
                 .select('*')
-                .order('issue_no', { ascending: false })
-                .range(batchOffset, batchOffset + BATCH_SIZE - 1);
+                .order('issue_no', { ascending: false });
+
+            // Filter by bulletin number if provided (major performance improvement)
+            if (bulletinNo) {
+                query = query.eq('issue_no', bulletinNo);
+            }
+
+            query = query.range(batchOffset, batchOffset + BATCH_SIZE - 1);
+
+            const { data, error } = await query;
 
             if (error) {
                 console.error("Search fetch error:", error);

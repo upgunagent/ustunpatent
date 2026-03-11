@@ -9,9 +9,10 @@ import { getFirmsForSelect } from '@/actions/firms';
 interface FirmComboboxProps {
     value?: string;
     onChange: (value: string) => void;
+    disabled?: boolean;
 }
 
-export function FirmCombobox({ value, onChange }: FirmComboboxProps) {
+export function FirmCombobox({ value, onChange, disabled = false }: FirmComboboxProps) {
     const [open, setOpen] = React.useState(false);
     const [search, setSearch] = React.useState('');
     const [firms, setFirms] = React.useState<{ id: string; label: string; subLabel?: string }[]>([]);
@@ -53,10 +54,15 @@ export function FirmCombobox({ value, onChange }: FirmComboboxProps) {
         <div className="relative w-full">
             <button
                 type="button"
-                onClick={() => setOpen(!open)}
-                className="flex h-10 w-full items-center justify-between rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#001a4f] disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => !disabled && setOpen(!open)}
+                disabled={disabled}
+                className={`flex h-10 w-full items-center justify-between rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#001a4f] ${
+                    disabled
+                        ? 'bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+                        : 'bg-white border-gray-300 placeholder:text-gray-400'
+                }`}
             >
-                {selectedFirm ? selectedFirm.label : "Firma Seçiniz..."}
+                {disabled ? "Önce bülten seçiniz..." : selectedFirm ? selectedFirm.label : "Firma Seçiniz..."}
                 <LucideChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
             </button>
 

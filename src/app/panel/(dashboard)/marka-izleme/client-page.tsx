@@ -5,7 +5,7 @@
 
 import { useState, useMemo, useTransition, useEffect, Fragment, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Loader2, LucideSearch, LucideShieldCheck, LucideDownload, LucideX } from 'lucide-react';
+import { Loader2, LucideSearch, LucideShieldCheck, LucideDownload, LucideX, LucideRefreshCw } from 'lucide-react';
 import BulletinTable, { BulletinMark } from '@/components/bulletins/BulletinTable';
 import PaginationControl from '@/components/bulletins/PaginationControl';
 import { calculateBrandSimilarity } from '@/lib/brand-similarity';
@@ -89,6 +89,20 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
         // Fetch agency settings
         getAgencySettings().then(setAgencySettings);
     }, []);
+
+    // Auto-re-search when bulletin changes and there's an active search
+    useEffect(() => {
+        if (selectedBulletin && searchedMarkName) {
+            startTransition(async () => {
+                const results = await searchBulletinMarks(searchedMarkName, selectedBulletin);
+                setSearchResults(results);
+                setClientPage(1);
+            });
+        } else if (!selectedBulletin) {
+            // If bulletin is cleared, clear search results
+            setSearchResults([]);
+        }
+    }, [selectedBulletin]);
 
     // Fetch trademarks and contacts when firm is selected
     useEffect(() => {
@@ -419,8 +433,8 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
         }
 
         startTransition(async () => {
-            // If searching a keyword, markName is the keyword.
-            const results = await searchBulletinMarks(markName);
+            // Search only in the selected bulletin (major performance improvement)
+            const results = await searchBulletinMarks(markName, selectedBulletin);
             setSearchResults(results);
             setClientPage(1);
         });
@@ -431,10 +445,8 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
         // Use searchResults if we have a search name, otherwise initialData (default view)
         let processed = searchedMarkName ? [...searchResults] : [...initialData];
 
-        // 1. Bulletin No Filter (Client Side if needed, but usually server handles fetching based on search context)
-        if (selectedBulletin) {
-            processed = processed.filter(item => String(item.issue_no).trim() == String(selectedBulletin).trim());
-        }
+        // Bulletin filter is now handled server-side via searchBulletinMarks(markName, bulletinNo)
+        // No need for client-side bulletin filtering anymore
 
         // 2 Class Filtering
         if (searchedClasses.length > 0) {
@@ -465,7 +477,7 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
         }
 
         return processed;
-    }, [initialData, searchResults, selectedBulletin, searchedMarkName, searchedClasses]);
+    }, [initialData, searchResults, searchedMarkName, searchedClasses]);
 
     // Pagination Logic
     const paginatedData = useMemo(() => {
@@ -524,8 +536,36 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
         }
     };
 
+    const handleReset = () => {
+        setSelectedBulletin('');
+        setSelectedFirmId('');
+        setSelectedFirm(null);
+        setFirmTrademarks([]);
+        setSearchedMarkName('');
+        setSearchResults([]);
+        setSearchedClasses([]);
+        setExpandedRows({});
+        setCurrentWatchedMark(null);
+        setMailQueue([]);
+        setPreviewUrl(null);
+        setClientPage(1);
+        setFirmContacts([]);
+        router.replace('/panel/marka-izleme');
+    };
+
     return (
         <div className="space-y-6">
+            {/* Reset Button */}
+            <div className="flex justify-end">
+                <button
+                    onClick={handleReset}
+                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-all shadow-sm"
+                >
+                    <LucideRefreshCw size={14} />
+                    Aramayı Sıfırla
+                </button>
+            </div>
+
             {/* Filter Section */}
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-6">
                 <div className="grid md:grid-cols-2 gap-6">
@@ -533,7 +573,10 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
                         <label className="block text-sm font-medium text-gray-700 mb-2">Bülten No</label>
                         <select
                             value={selectedBulletin}
-                            onChange={(e) => setSelectedBulletin(e.target.value)}
+                            onChange={(e) => {
+                                const newBulletin = e.target.value;
+                                setSelectedBulletin(newBulletin);
+                            }}
                             className="w-full rounded-md border border-gray-300 py-2 pl-3 pr-10 text-sm focus:border-[#001a4f] focus:outline-none focus:ring-1 focus:ring-[#001a4f]"
                         >
                             <option value="">Bülten Seçiniz</option>
@@ -547,6 +590,7 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
                         <FirmCombobox
                             value={selectedFirmId}
                             onChange={handleFirmChange}
+                            disabled={!selectedBulletin}
                         />
                     </div>
                 </div>
