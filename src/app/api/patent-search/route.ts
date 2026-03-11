@@ -603,57 +603,6 @@ export async function POST(req: NextRequest) {
 
             await new Promise(r => setTimeout(r, 2000));
 
-            // DEBUG: Get popup structure info before scraping
-            const popupDebug = await page.evaluate(() => {
-                const dialogs = document.querySelectorAll('[role="presentation"], [role="dialog"], .MuiDialog-root, .MuiModal-root');
-                const info: any = {
-                    dialogCount: dialogs.length,
-                    dialogClasses: [] as string[],
-                    contentAreaFound: false,
-                    fieldsetCount: 0,
-                    legendTexts: [] as string[],
-                    tableCount: 0,
-                    firstDialogChildTags: [] as string[],
-                    htmlSnippet: '',
-                };
-
-                if (dialogs.length > 0) {
-                    const dialog = dialogs[dialogs.length - 1]; // Take the last one (most likely the detail popup)
-                    info.dialogClasses = Array.from(dialog.classList || []);
-                    
-                    const contentArea = dialog.querySelector('.MuiCardContent-root, .MuiDialogContent-root');
-                    info.contentAreaFound = !!contentArea;
-                    
-                    const searchArea = contentArea || dialog;
-                    const fieldsets = searchArea.querySelectorAll('fieldset');
-                    info.fieldsetCount = fieldsets.length;
-                    
-                    fieldsets.forEach(fs => {
-                        const legend = fs.querySelector('legend');
-                        if (legend) info.legendTexts.push(legend.textContent?.trim() || '(empty)');
-                    });
-                    
-                    info.tableCount = searchArea.querySelectorAll('table').length;
-
-                    // Get child element tags
-                    const firstLevel = searchArea.children;
-                    for (let i = 0; i < Math.min(firstLevel.length, 20); i++) {
-                        const child = firstLevel[i];
-                        info.firstDialogChildTags.push(`${child.tagName}.${child.className?.toString().substring(0, 50)}`);
-                    }
-
-                    // Get a snippet of the inner HTML to understand the structure
-                    info.htmlSnippet = searchArea.innerHTML?.substring(0, 1500) || '';
-                }
-
-                return info;
-            });
-
-            log(`Popup Debug: dialogs=${popupDebug.dialogCount}, contentArea=${popupDebug.contentAreaFound}, fieldsets=${popupDebug.fieldsetCount}, tables=${popupDebug.tableCount}`);
-            log(`Legend texts: ${JSON.stringify(popupDebug.legendTexts)}`);
-            log(`Child tags: ${JSON.stringify(popupDebug.firstDialogChildTags)}`);
-            log(`HTML snippet (first 500): ${popupDebug.htmlSnippet.substring(0, 500)}`);
-
             // Scrape detail popup content - handles both TABLE and DIV-based (MUI JSS) structures
             const detailData = await page.evaluate(() => {
                 const result: any = {
