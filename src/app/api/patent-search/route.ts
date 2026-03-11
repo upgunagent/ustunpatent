@@ -352,11 +352,75 @@ export async function POST(req: NextRequest) {
 
         // Get fresh page ref if we reused browser
         if (!page && browser) {
-            const pages = await browser.pages();
-            page = pages.find(p => p.url().includes('turkpatent')) || null;
-            if (!page && pages.length > 0) page = pages[pages.length - 1];
-            if (!page) page = await browser.newPage();
-            log(`Using page: ${page.url()}`);
+            try {
+                const pages = await browser.pages();
+                page = pages.find(p => {
+                    try { return p.url().includes('turkpatent'); } catch { return false; }
+                }) || null;
+                if (!page && pages.length > 0) {
+                    // Test if the last page is still valid
+                    try {
+                        pages[pages.length - 1].url();
+                        page = pages[pages.length - 1];
+                    } catch {
+                        page = null;
+                    }
+                }
+                if (!page) page = await browser.newPage();
+                
+                // Verify page is still usable by testing a simple operation
+                try {
+                    await page.evaluate(() => document.title);
+                    log(`Using page: ${page.url()}`);
+                } catch (frameError: any) {
+                    log(`Page frame detached: ${frameError.message}. Creating fresh session...`);
+                    // Close the broken browser and start fresh
+                    try { await browser.close(); } catch (e) { /* ignore */ }
+                    globalBrowser = null;
+                    globalSessionId = null;
+                    
+                    browser = await launchBrowser();
+                    if (!browser) throw new Error("Browser başlatılamadı.");
+                    
+                    globalBrowser = browser;
+                    globalSessionId = `session_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+                    log(`Created fresh browser session after detached frame: ${globalSessionId}`);
+                    
+                    page = await browser.newPage();
+                    await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+                    if (process.env.NODE_ENV !== 'development') {
+                        await page.setViewport({ width: 1920, height: 1080 });
+                    }
+                    
+                    log("Navigating to Türk Patent (fresh)...");
+                    await page.goto('https://www.turkpatent.gov.tr/arastirma-yap?form=trademark', { waitUntil: 'domcontentloaded', timeout: 60000 });
+                    await dismissPopup(page, log);
+                    GlobalSession.update(globalSessionId);
+                }
+            } catch (e: any) {
+                log(`Session recovery error: ${e.message}. Starting completely fresh...`);
+                if (globalBrowser) {
+                    try { await globalBrowser.close(); } catch { /* ignore */ }
+                }
+                globalBrowser = null;
+                globalSessionId = null;
+                
+                browser = await launchBrowser();
+                if (!browser) throw new Error("Browser başlatılamadı.");
+                
+                globalBrowser = browser;
+                globalSessionId = `session_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+                
+                page = await browser.newPage();
+                await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+                if (process.env.NODE_ENV !== 'development') {
+                    await page.setViewport({ width: 1920, height: 1080 });
+                }
+                
+                await page.goto('https://www.turkpatent.gov.tr/arastirma-yap?form=trademark', { waitUntil: 'domcontentloaded', timeout: 60000 });
+                await dismissPopup(page, log);
+                GlobalSession.update(globalSessionId);
+            }
         }
 
         if (!page) throw new Error("Sayfa bulunamadı.");
@@ -369,8 +433,15 @@ export async function POST(req: NextRequest) {
             log(`Search Action: text=${searchText}, classes=${niceClasses}`);
 
             // Ensure we're on the search page
-            const currentUrl = page.url();
-            if (!currentUrl.includes('turkpatent.gov.tr') || !currentUrl.includes('arastirma')) {
+            let needsNavigation = true;
+            try {
+                const currentUrl = page.url();
+                needsNavigation = !currentUrl.includes('turkpatent.gov.tr') || !currentUrl.includes('arastirma');
+            } catch {
+                needsNavigation = true;
+            }
+            
+            if (needsNavigation) {
                 log("Not on search page, navigating...");
                 await page.goto('https://www.turkpatent.gov.tr/arastirma-yap?form=trademark', { waitUntil: 'domcontentloaded', timeout: 60000 });
                 await dismissPopup(page, log);
