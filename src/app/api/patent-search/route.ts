@@ -654,7 +654,7 @@ export async function POST(req: NextRequest) {
             log(`Child tags: ${JSON.stringify(popupDebug.firstDialogChildTags)}`);
             log(`HTML snippet (first 500): ${popupDebug.htmlSnippet.substring(0, 500)}`);
 
-            // Scrape detail popup content using FIELDSET/LEGEND structure
+            // Scrape detail popup content - handles both TABLE and DIV-based (MUI JSS) structures
             const detailData = await page.evaluate(() => {
                 const result: any = {
                     markaBilgileri: {} as Record<string, string>,
@@ -663,10 +663,160 @@ export async function POST(req: NextRequest) {
                 };
 
                 // Find the popup container
-                const dialog = document.querySelector('[role="presentation"], [role="dialog"], .MuiDialog-root, .MuiModal-root');
-                if (!dialog) return result;
-
+                const dialogs = document.querySelectorAll('[role="presentation"], [role="dialog"], .MuiDialog-root, .MuiModal-root');
+                if (dialogs.length === 0) return result;
+                
+                const dialog = dialogs[dialogs.length - 1]; // Last dialog is the detail popup
                 const contentArea = dialog.querySelector('.MuiCardContent-root, .MuiDialogContent-root') || dialog;
+
+                // Helper: Extract key-value pairs from any element (works with both table and div structures)
+                const extractKeyValuePairs = (container: Element): Record<string, string> => {
+                    const pairs: Record<string, string> = {};
+                    
+                    // Strategy 1: Try table-based extraction
+                    const tables = container.querySelectorAll('table');
+                    for (const table of tables) {
+                        const rows = table.querySelectorAll('tr');
+                        for (const row of rows) {
+                            const cells = row.querySelectorAll('td, th');
+                            if (cells.length >= 2) {
+                                const key = cells[0].textContent?.trim() || '';
+                                const value = cells[1].textContent?.trim() || '';
+                                if (key && value && key.length < 80) {
+                                    pairs[key] = value;
+                                }
+                                if (cells.length >= 4) {
+                                    const key2 = cells[2].textContent?.trim() || '';
+                                    const value2 = cells[3].textContent?.trim() || '';
+                                    if (key2 && value2 && key2.length < 80) {
+                                        pairs[key2] = value2;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Strategy 2: Div-based MUI JSS structure - look for label:value patterns
+                    if (Object.keys(pairs).length === 0) {
+                        // Get all text nodes and their structure
+                        const fullText = (container as HTMLElement).innerText || container.textContent || '';
+                        const lines = fullText.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 0);
+                        
+                        // Known label patterns for Marka Bilgileri
+                        const knownLabels = [
+                            'Başvuru Numarası', 'Başvuru Tarihi', 'Tescil Numarası', 'Tescil Tarihi',
+                            'Marka Adı', 'Marka Tipi', 'Marka Türü', 'Durumu', 'Durum',
+                            'Vekil Bilgileri', 'Sahip Bilgileri', 'Referans No',
+                            'Marka İlan Bülten No', 'Marka İlan Bülten Tarihi',
+                            'Tescil Yayın Bülten No', 'Tescil Yayın Bülten Tarihi',
+                            'Nice Sınıfları', 'Koruma Bitiş Tarihi',
+                            'Uluslararası Tescil Numarası', 'Uluslararası Başvuru Tarihi',
+                            'Menşe Ofis', 'Başvuru Sahibi', 'Vekil'
+                        ];
+                        
+                        // Try to find label:value patterns in adjacent lines
+                        for (let i = 0; i < lines.length; i++) {
+                            const line = lines[i];
+                            
+                            // Check if this line matches a known label
+                            for (const label of knownLabels) {
+                                if (line === label || line === label + ':' || line.startsWith(label + ':')) {
+                                    // Value might be the rest of this line or the next line
+                                    if (line.includes(':') && line.length > label.length + 1) {
+                                        const value = line.substring(line.indexOf(':') + 1).trim();
+                                        if (value) pairs[label] = value;
+                                    } else if (i + 1 < lines.length) {
+                                        const nextLine = lines[i + 1];
+                                        // Make sure next line isn't another label
+                                        const isLabel = knownLabels.some(l => nextLine === l || nextLine === l + ':');
+                                        if (!isLabel && nextLine.length > 0) {
+                                            pairs[label] = nextLine;
+                                        }
+                                    }
+                                    break;
+                                }
+                            }
+                            
+                            // Also try colon-separated key:value on same line
+                            const colonIdx = line.indexOf(':');
+                            if (colonIdx > 2 && colonIdx < 40) {
+                                const key = line.substring(0, colonIdx).trim();
+                                const value = line.substring(colonIdx + 1).trim();
+                                if (key && value && key.length < 50 && !pairs[key]) {
+                                    pairs[key] = value;
+                                }
+                            }
+                        }
+                        
+                        // Strategy 3: Look for div pairs - label div followed by value div
+                        const allDivs = container.querySelectorAll('div');
+                        for (let i = 0; i < allDivs.length; i++) {
+                            const div = allDivs[i];
+                            const text = div.textContent?.trim() || '';
+                            
+                            if (text && knownLabels.includes(text)) {
+                                // Look at next sibling or parent's next child
+                                const nextSibling = div.nextElementSibling;
+                                if (nextSibling) {
+                                    const sibText = nextSibling.textContent?.trim() || '';
+                                    if (sibText && sibText !== text && !knownLabels.includes(sibText)) {
+                                        pairs[text] = sibText;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    return pairs;
+                };
+
+                // Helper: Extract table data (works with both table and div grid)
+                const extractTableRows = (container: Element, minCols: number): string[][] => {
+                    const rows: string[][] = [];
+                    
+                    // Strategy 1: Standard table
+                    const tables = container.querySelectorAll('table');
+                    for (const table of tables) {
+                        const trs = table.querySelectorAll('tbody tr, tr');
+                        for (const tr of trs) {
+                            const cells = tr.querySelectorAll('td');
+                            if (cells.length >= minCols) {
+                                const row = Array.from(cells).map(c => c.textContent?.trim() || '-');
+                                rows.push(row);
+                            }
+                        }
+                    }
+                    
+                    // Strategy 2: If no table rows found, parse from text
+                    if (rows.length === 0) {
+                        const fullText = (container as HTMLElement).innerText || container.textContent || '';
+                        const lines = fullText.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 0);
+                        
+                        // Skip header lines
+                        const legendText = container.querySelector('legend')?.textContent?.trim() || '';
+                        const headerKeywords = ['Sınıf', 'Mal ve Hizmet', 'Tarih', 'Tebliğ', 'İşlem', 'Açıklama'];
+                        
+                        let dataStarted = false;
+                        let currentRow: string[] = [];
+                        
+                        for (const line of lines) {
+                            if (line === legendText) continue;
+                            if (headerKeywords.some(k => line.includes(k)) && !dataStarted) {
+                                dataStarted = true;
+                                continue;
+                            }
+                            if (dataStarted) {
+                                currentRow.push(line);
+                                if (currentRow.length >= minCols) {
+                                    rows.push([...currentRow]);
+                                    currentRow = [];
+                                }
+                            }
+                        }
+                    }
+                    
+                    return rows;
+                };
 
                 // Find all fieldset sections
                 const fieldsets = contentArea.querySelectorAll('fieldset');
@@ -677,31 +827,15 @@ export async function POST(req: NextRequest) {
 
                     if (sectionTitle.includes('Marka Bilgileri')) {
                         // ---- MARKA BİLGİLERİ ----
-                        const table = fieldset.querySelector('table');
-                        if (table) {
-                            const rows = table.querySelectorAll('tr');
-                            for (const row of rows) {
-                                const cells = row.querySelectorAll('td, th');
-                                // Handle rows with 2 cells (key-value)
-                                if (cells.length >= 2) {
-                                    const key = cells[0].textContent?.trim() || '';
-                                    const value = cells[1].textContent?.trim() || '';
-                                    if (key && key.length < 60 && !key.includes('Marka Bilgileri')) {
-                                        result.markaBilgileri[key] = value;
-                                    }
-                                    // Handle rows with 4 cells (2 key-value pairs side by side)
-                                    if (cells.length >= 4) {
-                                        const key2 = cells[2].textContent?.trim() || '';
-                                        const value2 = cells[3].textContent?.trim() || '';
-                                        if (key2 && key2.length < 60) {
-                                            result.markaBilgileri[key2] = value2;
-                                        }
-                                    }
-                                }
+                        const pairs = extractKeyValuePairs(fieldset);
+                        // Filter out the legend text itself
+                        for (const [key, value] of Object.entries(pairs)) {
+                            if (key !== 'Marka Bilgileri' && key.length > 1 && value.length > 0) {
+                                result.markaBilgileri[key] = value;
                             }
                         }
 
-                        // Also try to get logo image
+                        // Get logo image
                         const img = fieldset.querySelector('img');
                         if (img && img.src) {
                             result.markaBilgileri['Şekil'] = img.src;
@@ -709,63 +843,79 @@ export async function POST(req: NextRequest) {
 
                     } else if (sectionTitle.includes('Mal ve Hizmet')) {
                         // ---- MAL VE HİZMET BİLGİLERİ ----
-                        const table = fieldset.querySelector('table');
-                        if (table) {
-                            const rows = table.querySelectorAll('tbody tr, tr');
-                            for (const row of rows) {
-                                const cells = row.querySelectorAll('td');
-                                if (cells.length >= 2) {
-                                    const sinif = cells[0].textContent?.trim() || '';
-                                    const aciklama = cells[1].textContent?.trim() || '';
-                                    // Class number is typically a number (25, 35, etc.)
-                                    if (sinif && aciklama && /^\d+$/.test(sinif)) {
-                                        result.malHizmetBilgileri.push({ sinif, aciklama });
-                                    }
+                        const tableRows = extractTableRows(fieldset, 2);
+                        for (const row of tableRows) {
+                            const sinif = row[0]?.trim() || '';
+                            const aciklama = row.slice(1).join(' ').trim();
+                            if (sinif && aciklama && /^\d+$/.test(sinif)) {
+                                result.malHizmetBilgileri.push({ sinif, aciklama });
+                            }
+                        }
+                        
+                        // Fallback: Parse from text if no table rows
+                        if (result.malHizmetBilgileri.length === 0) {
+                            const text = (fieldset as HTMLElement).innerText || fieldset.textContent || '';
+                            const lines = text.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 0);
+                            let currentClass = '';
+                            
+                            for (const line of lines) {
+                                if (line === sectionTitle || line === 'Sınıf' || line === 'Mal ve Hizmetler') continue;
+                                if (/^\d{1,2}$/.test(line)) {
+                                    currentClass = line;
+                                } else if (currentClass && line.length > 10) {
+                                    result.malHizmetBilgileri.push({ sinif: currentClass, aciklama: line });
+                                    currentClass = '';
                                 }
                             }
                         }
 
-                    } else if (sectionTitle.includes('İşlem Bilgileri') || sectionTitle.includes('Başvuru İşlem')) {
+                    } else if (sectionTitle.includes('İşlem') || sectionTitle.includes('Başvuru İşlem')) {
                         // ---- BAŞVURU İŞLEM BİLGİLERİ ----
-                        const tables = fieldset.querySelectorAll('table');
-                        for (const table of tables) {
-                            const rows = table.querySelectorAll('tbody tr, tr');
-                            for (const row of rows) {
-                                const cells = row.querySelectorAll('td');
-                                if (cells.length >= 3) {
-                                    result.islemBilgileri.push({
-                                        tarih: cells[0].textContent?.trim() || '-',
-                                        tebligTarihi: cells[1].textContent?.trim() || '-',
-                                        islem: cells[2].textContent?.trim() || '-',
-                                        aciklama: cells.length >= 4 ? cells[3].textContent?.trim() || '-' : '-'
-                                    });
+                        const tableRows = extractTableRows(fieldset, 3);
+                        for (const row of tableRows) {
+                            result.islemBilgileri.push({
+                                tarih: row[0] || '-',
+                                tebligTarihi: row[1] || '-',
+                                islem: row[2] || '-',
+                                aciklama: row[3] || '-'
+                            });
+                        }
+                        
+                        // Fallback: Parse from text
+                        if (result.islemBilgileri.length === 0) {
+                            const text = (fieldset as HTMLElement).innerText || fieldset.textContent || '';
+                            const lines = text.split('\n').map((l: string) => l.trim()).filter((l: string) => l.length > 0);
+                            const datePattern = /^\d{2}\.\d{2}\.\d{4}$/;
+                            
+                            let i = 0;
+                            while (i < lines.length) {
+                                if (datePattern.test(lines[i])) {
+                                    const tarih = lines[i];
+                                    const teblig = (i + 1 < lines.length && (datePattern.test(lines[i+1]) || lines[i+1] === '-')) ? lines[i+1] : '-';
+                                    const islemIdx = teblig !== '-' ? i + 2 : i + 1;
+                                    const islem = islemIdx < lines.length ? lines[islemIdx] : '-';
+                                    const aciklama = islemIdx + 1 < lines.length && !datePattern.test(lines[islemIdx + 1]) ? lines[islemIdx + 1] : '-';
+                                    
+                                    result.islemBilgileri.push({ tarih, tebligTarihi: teblig, islem, aciklama });
+                                    i = aciklama !== '-' ? islemIdx + 2 : islemIdx + 1;
+                                } else {
+                                    i++;
                                 }
                             }
                         }
                     }
                 }
 
-                // Fallback: If no fieldsets found, try generic table scraping
-                if (Object.keys(result.markaBilgileri).length === 0 && fieldsets.length === 0) {
-                    const allTables = contentArea.querySelectorAll('table');
-                    for (const table of allTables) {
-                        const rows = table.querySelectorAll('tr');
-                        for (const row of rows) {
-                            const cells = row.querySelectorAll('td, th');
-                            if (cells.length >= 2) {
-                                const key = cells[0].textContent?.trim() || '';
-                                const value = cells[1].textContent?.trim() || '';
-                                if (key && value && key.length < 60) {
-                                    result.markaBilgileri[key] = value;
-                                }
-                                if (cells.length >= 4) {
-                                    const key2 = cells[2].textContent?.trim() || '';
-                                    const value2 = cells[3].textContent?.trim() || '';
-                                    if (key2 && value2 && key2.length < 60) {
-                                        result.markaBilgileri[key2] = value2;
-                                    }
-                                }
-                            }
+                // Ultimate fallback: Just get the full text content organized by sections
+                if (Object.keys(result.markaBilgileri).length === 0 && fieldsets.length > 0) {
+                    // Get the full text of each section
+                    for (const fieldset of fieldsets) {
+                        const legend = fieldset.querySelector('legend');
+                        const sectionTitle = legend?.textContent?.trim() || '';
+                        const sectionText = (fieldset as HTMLElement).innerText || fieldset.textContent || '';
+                        
+                        if (sectionTitle.includes('Marka Bilgileri')) {
+                            result.markaBilgileri['_rawText'] = sectionText.substring(0, 2000);
                         }
                     }
                 }
