@@ -34,7 +34,14 @@ export default function BulletinFilter({ onFilterChange, initialFilters, bulleti
     // const bulletinOptions is now passed as prop
     const classOptions = Array.from({ length: 45 }, (_, i) => (i + 1).toString().padStart(2, '0'));
 
+    const [bulletinError, setBulletinError] = useState(false);
+
     const handleSearch = () => {
+        if (!bulletinNo) {
+            setBulletinError(true);
+            return;
+        }
+        setBulletinError(false);
         onFilterChange({
             bulletinNo,
             markName,
@@ -84,16 +91,19 @@ export default function BulletinFilter({ onFilterChange, initialFilters, bulleti
                     <div className="relative">
                         <select
                             value={bulletinNo}
-                            onChange={(e) => setBulletinNo(e.target.value)}
-                            className="w-full h-10 pl-3 pr-8 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none bg-white"
+                            onChange={(e) => { setBulletinNo(e.target.value); setBulletinError(false); }}
+                            className={`w-full h-10 pl-3 pr-8 text-sm border rounded-md focus:outline-none focus:ring-2 appearance-none bg-white ${bulletinError ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 focus:ring-blue-500'}`}
                         >
-                            <option value="">Tümü</option>
+                            <option value="">Bülten No Seçin...</option>
                             {bulletinOptions.map(opt => (
                                 <option key={opt} value={opt}>{opt}</option>
                             ))}
                         </select>
                         <ChevronDown className="absolute right-2 top-3 text-gray-400 w-4 h-4 pointer-events-none" />
                     </div>
+                    {bulletinError && (
+                        <p className="text-xs text-red-500 mt-1">Lütfen bir bülten numarası seçin</p>
+                    )}
                 </div>
 
                 {/* Mark Name Search */}

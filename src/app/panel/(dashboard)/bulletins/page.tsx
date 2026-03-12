@@ -1,5 +1,4 @@
 import { createClient } from '@/lib/supabase/server';
-import { cookies } from 'next/headers';
 import { BulletinMark } from '@/components/bulletins/BulletinTable';
 import BulletinClientPage from './client-page';
 import { getAllBulletinIssues } from '@/lib/bulletin';
@@ -12,45 +11,35 @@ export default async function BulletinPage(props: {
         page?: string;
         limit?: string;
         markName?: string; // Marka adı arama parametresi
+        bulletinNo?: string; // Bülten numarası (zorunlu arama parametresi)
     }>;
 }) {
     const searchParams = await props.searchParams;
     const page = Number(searchParams?.page) || 1;
     const markName = searchParams?.markName || '';
+    const bulletinNo = searchParams?.bulletinNo || '';
 
-    // Eğer arama yapılıyorsa TÜM kayıtları fetch et, yoksa normal pagination
-    const isSearchMode = !!markName;
-    const limit = isSearchMode ? 10000 : 50; // Arama modunda limit yok (max 10K güvenlik)
-    const offset = isSearchMode ? 0 : (page - 1) * 50;
+    // Arama modu: bulletinNo seçildiğinde aktif olur
+    const isSearchMode = !!bulletinNo;
 
     const supabase = await createClient();
-
-    const query = supabase
-        .from('bulletin_marks')
-        .select('*', { count: 'exact' })
-        .order('issue_no', { ascending: false });
-
-    // Normal modda pagination uygula
-    if (!isSearchMode) {
-        query.range(offset, offset + 49);
-    }
 
     let initialData: BulletinMark[] = [];
     let totalCount = 0;
 
     if (isSearchMode) {
-        // Loop Fetching: Supabase 1000 limitini aşmak için parça parça çek
-        // 5000-10000 kayıt için uygundur. Milyonluk veride bu yöntem server-side search'e dönmelidir.
+        // Seçilen bülten numarasına ait TÜM kayıtları çek
+        // Tek bir bülten genelde birkaç bin kayıt olduğu için güvenlik limiti gerekmez
         let hasMore = true;
         let batchOffset = 0;
         const BATCH_SIZE = 1000;
 
         while (hasMore) {
-            // console.log(`Fetching batch: ${batchOffset} - ${batchOffset + BATCH_SIZE}`);
             const { data, error } = await supabase
                 .from('bulletin_marks')
                 .select('*')
-                .order('issue_no', { ascending: false })
+                .eq('issue_no', bulletinNo)
+                .order('mark_text_540', { ascending: true })
                 .range(batchOffset, batchOffset + BATCH_SIZE - 1);
 
             if (error) {
@@ -67,19 +56,22 @@ export default async function BulletinPage(props: {
             } else {
                 hasMore = false;
             }
-
-            // Güvenlik limiti (sonsuz döngüden kaçınmak için şimdilik 20K)
-            if (initialData.length >= 20000) hasMore = false;
         }
         totalCount = initialData.length;
     } else {
-        const { data: rawData, count } = await query;
+        // Normal mod: ilk sayfa pagination ile göster
+        const offset = (page - 1) * 50;
+        const { data: rawData, count } = await supabase
+            .from('bulletin_marks')
+            .select('*', { count: 'exact' })
+            .order('issue_no', { ascending: false })
+            .range(offset, offset + 49);
+
         initialData = (rawData || []) as BulletinMark[];
         totalCount = count || 0;
     }
 
-    // Bülten numaralarını çek (Benzersiz olanları almak için tümünü çekip JS ile filtreliyoruz)
-    // 100k+ veri desteği için batched fetch kullanıyoruz
+    // Bülten numaralarını çek
     const bulletinOptions = await getAllBulletinIssues(supabase);
 
     return (
@@ -93,6 +85,8 @@ export default async function BulletinPage(props: {
                 limit={50}
                 isSearchMode={isSearchMode}
                 bulletinOptions={bulletinOptions}
+                selectedBulletinNo={bulletinNo}
+                searchedMarkName={markName}
             />
         </div>
     );

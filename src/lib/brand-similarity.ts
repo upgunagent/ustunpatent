@@ -206,15 +206,16 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
         }
     }
 
-    // Check for FUZZY matches (edit distance <= 2) if no exact match
+    // Check for FUZZY matches if no exact match
     if (qTokensMatched === 0) {
         for (const qToken of meaningfulQTokens) {
             const fuzzyMatch = cTokenFlags.find(ct => {
                 const d = levenshteinDistance(qToken, ct.text);
                 // Dynamic threshold based on length
-                // Words < 6 chars: strictly 1 max edit distance (e.g. panco vs bianco -> dist 2 -> fail)
-                // Words >= 6 chars: max 2 edit distance (e.g. netrit vs netritma -> dist 2 -> pass)
-                const maxDist = qToken.length < 6 ? 1 : 2;
+                // Words < 6 chars: strictly 1 max edit distance
+                // Words 6 chars: max 2 edit distance
+                // Words >= 7 chars: max 3 edit distance (e.g. fermoda vs fermano -> dist 3 -> pass)
+                const maxDist = qToken.length < 6 ? 1 : (qToken.length < 7 ? 2 : 3);
 
                 // Length ratio check: avoid matching very different length words
                 const lenRatio = Math.min(qToken.length, ct.text.length) / Math.max(qToken.length, ct.text.length);
@@ -223,7 +224,24 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
                 const isSubstring = (qToken.length >= 4 && ct.text.includes(qToken)) || (ct.text.length >= 4 && qToken.includes(ct.text));
                 if (isSubstring) return true;
 
-                return d <= maxDist && ct.text.length >= 2 && lenRatio >= 0.7;
+                // EDIT DISTANCE MATCH
+                if (d <= maxDist && ct.text.length >= 2 && lenRatio >= 0.7) return true;
+
+                // JARO-WINKLER MATCH: Catches words with same prefix but multiple char diffs
+                // e.g. fermoda vs fermano (JW ~0.81 due to shared "ferm" prefix)
+                const jwTokenScore = jaroWinkler(qToken, ct.text);
+                if (jwTokenScore >= 0.78 && lenRatio >= 0.7) return true;
+
+                // PREFIX MATCH: Same first 4+ chars and similar length
+                // e.g. fermoda vs fermano (both start with "ferm", same length)
+                if (qToken.length >= 5 && ct.text.length >= 5) {
+                    const prefixLen = Math.min(4, Math.floor(Math.min(qToken.length, ct.text.length) * 0.6));
+                    if (prefixLen >= 3 && qToken.substring(0, prefixLen) === ct.text.substring(0, prefixLen) && lenRatio >= 0.8) {
+                        return true;
+                    }
+                }
+
+                return false;
             });
 
             if (fuzzyMatch) {

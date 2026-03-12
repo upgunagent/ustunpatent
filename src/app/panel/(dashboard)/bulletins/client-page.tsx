@@ -16,9 +16,11 @@ interface BulletinClientPageProps {
     limit: number;
     isSearchMode: boolean; // Arama modu flag'i
     bulletinOptions: string[];
+    selectedBulletinNo: string;
+    searchedMarkName: string;
 }
 
-export default function BulletinClientPage({ initialData, totalCount, currentPage, limit, isSearchMode, bulletinOptions }: BulletinClientPageProps) {
+export default function BulletinClientPage({ initialData, totalCount, currentPage, limit, isSearchMode, bulletinOptions, selectedBulletinNo, searchedMarkName }: BulletinClientPageProps) {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [isPending, startTransition] = useTransition();
@@ -30,22 +32,23 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
     const [selectedMark, setSelectedMark] = useState<BulletinMark | null>(null);
 
     const [filters, setFilters] = useState<FilterState>({
-        bulletinNo: '',
-        markName: searchParams.get('markName') || '', // URL'den al
+        bulletinNo: selectedBulletinNo || '',
+        markName: searchedMarkName || '',
         classes: []
     });
 
     const handleFilterChange = (newFilters: FilterState) => {
         setFilters(newFilters);
+        setClientPage(1); // Yeni arama yapıldığında ilk sayfaya dön
 
-        // markName değiştiğinde URL'i güncelle ve server-side fetch tetikle
+        // bulletinNo seçildiğinde URL'i güncelle ve server-side fetch tetikle
         startTransition(() => {
-            const params = new URLSearchParams(searchParams);
+            const params = new URLSearchParams();
+            if (newFilters.bulletinNo) {
+                params.set('bulletinNo', newFilters.bulletinNo);
+            }
             if (newFilters.markName) {
                 params.set('markName', newFilters.markName);
-                params.delete('page'); // İlk sayfaya dön
-            } else {
-                params.delete('markName');
             }
             router.push(`?${params.toString()}`);
         });
@@ -54,12 +57,7 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
     const filteredData = useMemo(() => {
         let processed = [...initialData];
 
-        // 1. Bulletin No Filter
-        if (filters.bulletinNo) {
-            processed = processed.filter(item => String(item.issue_no).trim() == String(filters.bulletinNo).trim());
-        }
-
-        // 3. Classes Filter
+        // 1. Classes Filter
         if (filters.classes.length > 0) {
             processed = processed.filter(item => {
                 if (!item.nice_classes_511) return false;
@@ -127,8 +125,6 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
     return (
         <div className="space-y-6 relative">
 
-
-
             <BulletinFilter
                 onFilterChange={handleFilterChange}
                 initialFilters={filters}
@@ -139,7 +135,7 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
                 <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
                     <span className="text-sm text-gray-500">
                         {isSearchMode
-                            ? `Sonuç: ${filteredData.length} (Toplam Taranan: ${initialData.length}) ${filters.markName ? `- Aranan: "${filters.markName}"` : ''}`
+                            ? `Bülten ${selectedBulletinNo} - Toplam Kayıt: ${initialData.length}${filters.markName ? ` | Benzer Sonuç: ${filteredData.length} - Aranan: "${filters.markName}"` : ` | Gösterilen: ${paginatedData.length}`}`
                             : `${paginatedData.length} kayıt listeleniyor (Toplam: ${totalCount})`
                         }
                     </span>
@@ -155,7 +151,7 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
                             </div>
                             <div className="text-center">
                                 <h3 className="text-lg font-semibold text-gray-900">Lütfen bekleyiniz..</h3>
-                                <p className="text-sm text-gray-500 mt-1">Veritabanı taranıyor, lütfen bekleyin...</p>
+                                <p className="text-sm text-gray-500 mt-1">Bülten verileri yükleniyor...</p>
                             </div>
                         </div>
                     </div>
@@ -166,7 +162,10 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
                     />
                 ) : (
                     <div className="p-8 text-center text-gray-500">
-                        Aradığınız kriterlere uygun kayıt bulunamadı.
+                        {isSearchMode
+                            ? 'Aradığınız kriterlere uygun kayıt bulunamadı.'
+                            : 'Lütfen bir bülten numarası seçerek arama yapın.'
+                        }
                     </div>
                 )}
             </div>
@@ -189,3 +188,4 @@ export default function BulletinClientPage({ initialData, totalCount, currentPag
         </div>
     );
 }
+
