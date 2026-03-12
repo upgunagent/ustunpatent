@@ -125,6 +125,7 @@ export const generateWatchedMarksPDF = async (marks: WatchedTrademark[]) => {
         body: tableRows,
         startY: 30,
         margin: { top: 30 },
+        rowPageBreak: 'avoid',
         theme: 'grid',
         styles: {
             font: 'Roboto',
