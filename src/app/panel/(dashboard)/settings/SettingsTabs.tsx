@@ -5,12 +5,14 @@ import { AgencyData } from '@/actions/settings';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import FirmInfoTab from './FirmInfoTab';
 import ConsultantsTab from './ConsultantsTab';
+import BulletinSettingsTab from './BulletinSettingsTab';
 
 interface Props {
     data: AgencyData;
+    bulletinOptions: string[];
 }
 
-export default function SettingsTabs({ data }: Props) {
+export default function SettingsTabs({ data, bulletinOptions }: Props) {
     return (
         <Tabs defaultValue="firm-info" className="space-y-8">
             <div className="pb-2">
@@ -27,6 +29,12 @@ export default function SettingsTabs({ data }: Props) {
                     >
                         Danışmanlar
                     </TabsTrigger>
+                    <TabsTrigger
+                        value="bulletin-settings"
+                        className="px-6 py-2.5 rounded-md data-[state=active]:bg-[#001a4f] data-[state=active]:text-white text-gray-500 hover:text-[#001a4f] hover:bg-blue-50 transition-all text-base font-semibold shadow-sm data-[state=active]:shadow-md"
+                    >
+                        Bülten Ayarları
+                    </TabsTrigger>
                 </TabsList>
             </div>
 
@@ -36,6 +44,10 @@ export default function SettingsTabs({ data }: Props) {
 
             <TabsContent value="consultants" className="focus-visible:outline-none animate-in fade-in slide-in-from-right-4 duration-300">
                 <ConsultantsTab data={data} />
+            </TabsContent>
+
+            <TabsContent value="bulletin-settings" className="focus-visible:outline-none animate-in fade-in slide-in-from-right-4 duration-300">
+                <BulletinSettingsTab bulletinOptions={bulletinOptions} />
             </TabsContent>
         </Tabs>
     );
