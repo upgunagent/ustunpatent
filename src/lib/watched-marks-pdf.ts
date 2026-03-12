@@ -13,6 +13,9 @@ export const generateWatchedMarksPDF = async (marks: WatchedTrademark[]) => {
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
 
+    let base64Logo: string | null = null;
+    let hasCustomFont = false;
+
     // --- Font & Logo Handling ---
     try {
         const fontUrlRegular = window.location.origin + '/fonts/Roboto-Regular.ttf';
@@ -37,7 +40,7 @@ export const generateWatchedMarksPDF = async (marks: WatchedTrademark[]) => {
 
         const base64Regular = toBase64(blobRegular);
         const base64Medium = toBase64(blobMedium);
-        const base64Logo = toBase64(blobLogo);
+        base64Logo = toBase64(blobLogo);
 
         doc.addFileToVFS('Roboto-Regular.ttf', base64Regular);
         doc.addFileToVFS('Roboto-Medium.ttf', base64Medium);
@@ -45,39 +48,45 @@ export const generateWatchedMarksPDF = async (marks: WatchedTrademark[]) => {
         doc.addFont('Roboto-Regular.ttf', 'Roboto', 'normal');
         doc.addFont('Roboto-Medium.ttf', 'Roboto', 'bold');
 
-        doc.setFont('Roboto');
+        hasCustomFont = true;
+    } catch (e) {
+        console.error("Resource loading failed", e);
+    }
 
-        // --- Header ---
+    const drawHeader = () => {
+        if (hasCustomFont) {
+            doc.setFont('Roboto', 'normal');
+        } else {
+            doc.setFont('helvetica', 'normal');
+        }
+
+        // --- Header Background ---
         doc.setFillColor(0, 26, 79); // #001a4f Blue Color
         doc.rect(0, 0, pageWidth, 20, 'F');
 
-        // Logo Image
-        doc.addImage(base64Logo, 'PNG', 15, 6, 40, 8);
+        // Logo Image or Fallback Text
+        if (base64Logo) {
+            doc.addImage(base64Logo, 'PNG', 15, 6, 40, 8);
+        } else {
+            doc.setTextColor(255, 255, 255);
+            doc.setFontSize(14);
+            doc.text('ÜSTÜN PATENT', 15, 13);
+        }
 
-    } catch (e) {
-        console.error("Resource loading failed", e);
-        doc.setFont('helvetica');
-        // Fallback Header
-        doc.setFillColor(0, 26, 79);
-        doc.rect(0, 0, pageWidth, 20, 'F');
+        // Page Title
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(14);
-        doc.text('ÜSTÜN PATENT', 15, 13);
-    }
+        if (hasCustomFont) doc.setFont('Roboto', 'bold');
+        doc.text('İZLENEN MARKALAR LİSTESİ', 70, 13);
 
-    // Page Title (Left in header, next to logo?? Or below?)
-    // User request: "solda menü sağda günün tarihi olacak şekilde" -> "solda menü" probably means the title "İzlenen Markalar" or similar context.
-    // Let's put "İZLENEN MARKALAR LİSTESİ" next to logo or just "İZLENEN MARKALAR"
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(14);
-    doc.setFont('Roboto', 'bold');
-    doc.text('İZLENEN MARKALAR LİSTESİ', 70, 13); // Adjust X position
+        // Date (Right aligned in header)
+        const today = new Date().toLocaleDateString('tr-TR');
+        doc.setFontSize(10);
+        if (hasCustomFont) doc.setFont('Roboto', 'normal');
+        doc.text(today, pageWidth - 15, 13, { align: 'right' });
+    };
 
-    // Date (Right aligned in header)
-    const today = new Date().toLocaleDateString('tr-TR');
-    doc.setFontSize(10);
-    doc.setFont('Roboto', 'normal');
-    doc.text(today, pageWidth - 15, 13, { align: 'right' });
+    drawHeader();
 
     // --- Table Content ---
     doc.setTextColor(0, 0, 0); // Reset to black
@@ -115,6 +124,7 @@ export const generateWatchedMarksPDF = async (marks: WatchedTrademark[]) => {
         head: [tableColumn],
         body: tableRows,
         startY: 30,
+        margin: { top: 30 },
         theme: 'grid',
         styles: {
             font: 'Roboto',
@@ -145,15 +155,8 @@ export const generateWatchedMarksPDF = async (marks: WatchedTrademark[]) => {
             10: { cellWidth: 'auto' } // Danışman
         },
         didDrawPage: (data) => {
-            // Header is drawn once at start (manually), but for subsequent pages we might need it?
-            // autoTable handles header row repetition.
-            // If we want the BLUE header on every page, we need to check data.pageNumber
             if (data.pageNumber > 1) {
-                // Draw header background again
-                doc.setFillColor(0, 26, 79);
-                doc.rect(0, 0, pageWidth, 20, 'F');
-                // Re-draw logo and title if needed, but usually just page number is enough or simpler header.
-                // For now let's keep it simple or minimal on subsequent pages or just rely on autotable header.
+                drawHeader();
             }
         }
     });
