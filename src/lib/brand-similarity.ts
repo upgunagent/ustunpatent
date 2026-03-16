@@ -38,6 +38,11 @@ function getAsciiVariant(text: string): string {
     return text.split('').map(c => ASCII_MAP[c] || c).join('');
 }
 
+function getConsonantSkeleton(text: string): string {
+    const ascii = getAsciiVariant(text);
+    return ascii.replace(/[aeiouy]/g, '');
+}
+
 function tokenize(text: string): string[] {
     return text.split(' ').filter(t => t.length > 0);
 }
@@ -197,9 +202,10 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
 
     let qTokensMatched = 0;
 
-    // Calculate EXACT matches
+    // Calculate EXACT matches (ASCII-normalized: ı=i, ş=s, ç=c, ö=o, ü=u, ğ=g)
     for (const qToken of meaningfulQTokens) {
-        const exactMatchIndex = cTokenFlags.findIndex(ct => ct.text === qToken);
+        const qTokenAscii = getAsciiVariant(qToken);
+        const exactMatchIndex = cTokenFlags.findIndex(ct => ct.text === qToken || getAsciiVariant(ct.text) === qTokenAscii);
         if (exactMatchIndex !== -1) {
             qTokensMatched++;
             matchedTokenList.push(qToken);
@@ -210,35 +216,55 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
     if (qTokensMatched === 0) {
         for (const qToken of meaningfulQTokens) {
             const fuzzyMatch = cTokenFlags.find(ct => {
+                // ASCII varyantları (ı=i, ş=s, ç=c, ö=o, ü=u, ğ=g)
+                const qTokenAscii = getAsciiVariant(qToken);
+                const ctAscii = getAsciiVariant(ct.text);
+
                 const d = levenshteinDistance(qToken, ct.text);
+                const dAscii = levenshteinDistance(qTokenAscii, ctAscii);
+                const minDist = Math.min(d, dAscii);
                 // Dynamic threshold based on length
-                // Words < 6 chars: strictly 1 max edit distance
-                // Words 6 chars: max 2 edit distance
-                // Words >= 7 chars: max 3 edit distance (e.g. fermoda vs fermano -> dist 3 -> pass)
                 const maxDist = qToken.length < 6 ? 1 : (qToken.length < 7 ? 2 : 3);
 
                 // Length ratio check: avoid matching very different length words
                 const lenRatio = Math.min(qToken.length, ct.text.length) / Math.max(qToken.length, ct.text.length);
 
-                // SUBSTRING MATCH: Check if one contains the other (min 4 chars)
-                const isSubstring = (qToken.length >= 4 && ct.text.includes(qToken)) || (ct.text.length >= 4 && qToken.includes(ct.text));
+                // SUBSTRING MATCH: Check if one contains the other (min 2 chars)
+                // Hem orijinal hem ASCII varyantlarıyla kontrol et
+                const isSubstring = (qToken.length >= 2 && ct.text.includes(qToken)) || (ct.text.length >= 2 && qToken.includes(ct.text))
+                    || (qTokenAscii.length >= 2 && ctAscii.includes(qTokenAscii)) || (ctAscii.length >= 2 && qTokenAscii.includes(ctAscii));
                 if (isSubstring) return true;
 
-                // EDIT DISTANCE MATCH
-                if (d <= maxDist && ct.text.length >= 2 && lenRatio >= 0.7) return true;
-
-                // JARO-WINKLER MATCH: Catches words with same prefix but multiple char diffs
-                // e.g. fermoda vs fermano (JW ~0.81 due to shared "ferm" prefix)
-                const jwTokenScore = jaroWinkler(qToken, ct.text);
-                if (jwTokenScore >= 0.78 && lenRatio >= 0.7) return true;
-
-                // PREFIX MATCH: Same first 4+ chars and similar length
-                // e.g. fermoda vs fermano (both start with "ferm", same length)
-                if (qToken.length >= 5 && ct.text.length >= 5) {
-                    const prefixLen = Math.min(4, Math.floor(Math.min(qToken.length, ct.text.length) * 0.6));
-                    if (prefixLen >= 3 && qToken.substring(0, prefixLen) === ct.text.substring(0, prefixLen) && lenRatio >= 0.8) {
+                // KISA SORGU PREFİX KONTROLÜ (2-4 karakter) - ASCII varyantlarıyla da kontrol
+                if (qToken.length >= 2 && qToken.length <= 4) {
+                    if ((ct.text.startsWith(qToken) || ctAscii.startsWith(qTokenAscii)) && ct.text.length > qToken.length) {
                         return true;
                     }
+                }
+
+                // EDIT DISTANCE MATCH (ASCII varyantı ile daha düşük mesafe kullan)
+                if (minDist <= maxDist && ct.text.length >= 2 && lenRatio >= 0.7) return true;
+
+                // JARO-WINKLER MATCH (hem orijinal hem ASCII ile kontrol)
+                const jwTokenScore = Math.max(jaroWinkler(qToken, ct.text), jaroWinkler(qTokenAscii, ctAscii));
+                if (jwTokenScore >= 0.78 && lenRatio >= 0.7) return true;
+
+                // PREFIX MATCH: Same first 4+ chars and similar length (ASCII ile de)
+                if (qToken.length >= 5 && ct.text.length >= 5) {
+                    const prefixLen = Math.min(4, Math.floor(Math.min(qToken.length, ct.text.length) * 0.6));
+                    if (prefixLen >= 3 && lenRatio >= 0.8) {
+                        if (qToken.substring(0, prefixLen) === ct.text.substring(0, prefixLen)
+                            || qTokenAscii.substring(0, prefixLen) === ctAscii.substring(0, prefixLen)) {
+                            return true;
+                        }
+                    }
+                }
+
+                // SESSİZ HARF İSKELETİ EŞLEŞMESİ
+                const qConsonants = getConsonantSkeleton(qToken);
+                const cConsonants = getConsonantSkeleton(ct.text);
+                if (qConsonants.length >= 2 && qConsonants === cConsonants) {
+                    return true;
                 }
 
                 return false;
@@ -369,16 +395,44 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
 
     // --- D) Morphological Score (Stemming) ---
     let morphScore = 0;
-    if (meaningfulQTokens.length === 1 && meaningfulCTokens.length >= 1) {
-        const qToken = meaningfulQTokens[0];
-        for (const ct of meaningfulCTokens) {
-            if (qToken.length < 3) continue;
+    if (meaningfulCTokens.length >= 1) {
+        for (const qToken of meaningfulQTokens) {
+            if (qToken.length < 2) continue;
+            for (const ct of meaningfulCTokens) {
+                // ASCII varyantları (ı=i, ş=s, ç=c, ö=o, ü=u, ğ=g)
+                const qAscii = getAsciiVariant(qToken);
+                const cAscii = getAsciiVariant(ct);
 
-            if (ct.startsWith(qToken) && ct.length > qToken.length) {
-                morphScore = 85;
-            }
-            if (qToken.startsWith(ct) && qToken.length > ct.length) {
-                morphScore = 80;
+                // Prefix eşleşmesi: sorgu adayın başlangıcıysa (ASCII ile de)
+                if ((ct.startsWith(qToken) || cAscii.startsWith(qAscii)) && ct.length > qToken.length) {
+                    morphScore = Math.max(morphScore, 85);
+                }
+                // Ters prefix: aday sorgunun başlangıcıysa (ASCII ile de)
+                if ((qToken.startsWith(ct) || qAscii.startsWith(cAscii)) && qToken.length > ct.length && ct.length >= 2) {
+                    morphScore = Math.max(morphScore, 80);
+                }
+                // Substring/Contains eşleşmesi (ASCII ile de)
+                if (qToken.length >= 2 && ct.length > qToken.length) {
+                    const isContained = ct.includes(qToken) || cAscii.includes(qAscii);
+                    const isPrefix = ct.startsWith(qToken) || cAscii.startsWith(qAscii);
+                    if (isContained && !isPrefix) {
+                        morphScore = Math.max(morphScore, 70);
+                    }
+                }
+                // Ters substring (ASCII ile de)
+                if (ct.length >= 2 && qToken.length > ct.length) {
+                    const isContained = qToken.includes(ct) || qAscii.includes(cAscii);
+                    const isPrefix = qToken.startsWith(ct) || qAscii.startsWith(cAscii);
+                    if (isContained && !isPrefix) {
+                        morphScore = Math.max(morphScore, 65);
+                    }
+                }
+                // Sessiz harf iskeleti prefix eşleşmesi
+                const qConsonants = getConsonantSkeleton(qToken);
+                const cConsonants = getConsonantSkeleton(ct);
+                if (qConsonants.length >= 2 && cConsonants.length >= 2 && qConsonants === cConsonants) {
+                    morphScore = Math.max(morphScore, 75);
+                }
             }
         }
     }
@@ -424,9 +478,17 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
         const cAscii = getAsciiVariant(cFirst);
 
         // Exact match or Prefix match (if query is long enough) on FIRST token
-        if (qAscii === cAscii || (qFirst.length >= 3 && cAscii.startsWith(qAscii))) {
+        if (qAscii === cAscii || (qFirst.length >= 2 && cAscii.startsWith(qAscii))) {
             finalScore = Math.max(finalScore, 65);
             if (finalScore === 65) matchType = "İlk kelime eşleşmesi";
+        }
+
+        // İlk kelime sessiz harf iskeleti eşleşmesi
+        const qFirstConsonants = getConsonantSkeleton(qFirst);
+        const cFirstConsonants = getConsonantSkeleton(cFirst);
+        if (qFirstConsonants.length >= 2 && qFirstConsonants === cFirstConsonants) {
+            finalScore = Math.max(finalScore, 55);
+            if (!matchType || finalScore === 55) matchType = "Sessiz harf iskeleti eşleşmesi";
         }
     }
 
