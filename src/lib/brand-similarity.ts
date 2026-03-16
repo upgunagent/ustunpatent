@@ -267,6 +267,14 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
                     return true;
                 }
 
+                // FONETİK SUBSTRING/PREFIX EŞLEŞMESİ
+                // Örn: "krow" → fonetik "krow", "growpal" → fonetik "krowpal" → prefix eşleşir
+                const qPhonetic = getPhoneticKey(qTokenAscii);
+                const cPhonetic = getPhoneticKey(ctAscii);
+                if (qPhonetic.length >= 3 && (cPhonetic.includes(qPhonetic) || qPhonetic.includes(cPhonetic))) {
+                    return true;
+                }
+
                 return false;
             });
 
@@ -432,6 +440,15 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
                 const cConsonants = getConsonantSkeleton(ct);
                 if (qConsonants.length >= 2 && cConsonants.length >= 2 && qConsonants === cConsonants) {
                     morphScore = Math.max(morphScore, 75);
+                }
+                // Fonetik prefix/substring eşleşmesi
+                const qPhonetic = getPhoneticKey(qAscii);
+                const cPhonetic = getPhoneticKey(cAscii);
+                if (qPhonetic.length >= 3 && cPhonetic.startsWith(qPhonetic) && ct.length > qToken.length) {
+                    morphScore = Math.max(morphScore, 80);
+                }
+                if (qPhonetic.length >= 3 && cPhonetic.includes(qPhonetic) && !cPhonetic.startsWith(qPhonetic) && ct.length > qToken.length) {
+                    morphScore = Math.max(morphScore, 65);
                 }
             }
         }
