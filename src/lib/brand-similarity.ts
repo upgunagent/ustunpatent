@@ -224,7 +224,8 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
                 const dAscii = levenshteinDistance(qTokenAscii, ctAscii);
                 const minDist = Math.min(d, dAscii);
                 // Dynamic threshold based on length
-                const maxDist = qToken.length < 6 ? 1 : (qToken.length < 7 ? 2 : 3);
+                // <= 3 harf: max 1, <= 5 harf: max 2, <= 7 harf: max 3, 8+ harf: max 4
+                const maxDist = qToken.length <= 3 ? 1 : (qToken.length <= 5 ? 2 : (qToken.length <= 7 ? 3 : 4));
 
                 // Length ratio check: avoid matching very different length words
                 const lenRatio = Math.min(qToken.length, ct.text.length) / Math.max(qToken.length, ct.text.length);
