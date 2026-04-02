@@ -247,12 +247,12 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
 
                 // JARO-WINKLER MATCH (hem orijinal hem ASCII ile kontrol)
                 const jwTokenScore = Math.max(jaroWinkler(qToken, ct.text), jaroWinkler(qTokenAscii, ctAscii));
-                if (jwTokenScore >= 0.78 && lenRatio >= 0.7) return true;
+                if (jwTokenScore >= 0.78 && lenRatio >= 0.5) return true;
 
                 // PREFIX MATCH: Same first 4+ chars and similar length (ASCII ile de)
                 if (qToken.length >= 5 && ct.text.length >= 5) {
                     const prefixLen = Math.min(4, Math.floor(Math.min(qToken.length, ct.text.length) * 0.6));
-                    if (prefixLen >= 3 && lenRatio >= 0.8) {
+                    if (prefixLen >= 3 && lenRatio >= 0.5) {
                         if (qToken.substring(0, prefixLen) === ct.text.substring(0, prefixLen)
                             || qTokenAscii.substring(0, prefixLen) === ctAscii.substring(0, prefixLen)) {
                             return true;
@@ -260,10 +260,10 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
                     }
                 }
 
-                // SESSİZ HARF İSKELETİ EŞLEŞMESİ
+                // SESSİZ HARF İSKELETİ EŞLEŞMESİ (min 3 sessiz harf, 2 çok genel)
                 const qConsonants = getConsonantSkeleton(qToken);
                 const cConsonants = getConsonantSkeleton(ct.text);
-                if (qConsonants.length >= 2 && qConsonants === cConsonants) {
+                if (qConsonants.length >= 3 && qConsonants === cConsonants) {
                     return true;
                 }
 
@@ -272,6 +272,20 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
                 const qPhonetic = getPhoneticKey(qTokenAscii);
                 const cPhonetic = getPhoneticKey(ctAscii);
                 if (qPhonetic.length >= 3 && (cPhonetic.includes(qPhonetic) || qPhonetic.includes(cPhonetic))) {
+                    return true;
+                }
+
+                // ORTAK PREFİX EŞLEŞMESİ
+                // İlk 4+ karakter aynıysa (veya kısa kelimenin %75'i) uzunluk farkı önemli değil
+                // Örn: "leony" vs "leonpack" → ilk 4 karakter "leon" aynı → eşleşmeli
+                let commonPrefixLen = 0;
+                const minLen = Math.min(qTokenAscii.length, ctAscii.length);
+                for (let i = 0; i < minLen; i++) {
+                    if (qTokenAscii[i] === ctAscii[i]) commonPrefixLen++;
+                    else break;
+                }
+                const shortLen = Math.min(qToken.length, ct.text.length);
+                if (commonPrefixLen >= 4 || (commonPrefixLen >= 3 && commonPrefixLen >= shortLen * 0.75)) {
                     return true;
                 }
 
@@ -435,10 +449,10 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
                         morphScore = Math.max(morphScore, 65);
                     }
                 }
-                // Sessiz harf iskeleti prefix eşleşmesi
+                // Sessiz harf iskeleti prefix eşleşmesi (min 3 sessiz harf, 2 çok genel)
                 const qConsonants = getConsonantSkeleton(qToken);
                 const cConsonants = getConsonantSkeleton(ct);
-                if (qConsonants.length >= 2 && cConsonants.length >= 2 && qConsonants === cConsonants) {
+                if (qConsonants.length >= 3 && cConsonants.length >= 3 && qConsonants === cConsonants) {
                     morphScore = Math.max(morphScore, 75);
                 }
                 // Fonetik prefix/substring eşleşmesi
@@ -449,6 +463,22 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
                 }
                 if (qPhonetic.length >= 3 && cPhonetic.includes(qPhonetic) && !cPhonetic.startsWith(qPhonetic) && ct.length > qToken.length) {
                     morphScore = Math.max(morphScore, 65);
+                }
+
+                // ORTAK PREFIX MORPH SKORU
+                // İlk 4+ karakter aynıysa tam prefix olmasa bile yüksek skor ver
+                // Örn: "leony" vs "leonpack" → 4 karakter "leon" ortak → morphScore = 76
+                let cpLen = 0;
+                const cpMinLen = Math.min(qAscii.length, cAscii.length);
+                for (let ci = 0; ci < cpMinLen; ci++) {
+                    if (qAscii[ci] === cAscii[ci]) cpLen++;
+                    else break;
+                }
+                const cpShortLen = Math.min(qToken.length, ct.length);
+                if (cpLen >= 4 || (cpLen >= 3 && cpLen >= cpShortLen * 0.75)) {
+                    const prefixRatio = cpLen / cpShortLen;
+                    const cpScore = Math.round(60 + prefixRatio * 20); // 60-80 arası
+                    morphScore = Math.max(morphScore, cpScore);
                 }
             }
         }
@@ -500,10 +530,10 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
             if (finalScore === 65) matchType = "İlk kelime eşleşmesi";
         }
 
-        // İlk kelime sessiz harf iskeleti eşleşmesi
+        // İlk kelime sessiz harf iskeleti eşleşmesi (min 3 sessiz harf)
         const qFirstConsonants = getConsonantSkeleton(qFirst);
         const cFirstConsonants = getConsonantSkeleton(cFirst);
-        if (qFirstConsonants.length >= 2 && qFirstConsonants === cFirstConsonants) {
+        if (qFirstConsonants.length >= 3 && qFirstConsonants === cFirstConsonants) {
             finalScore = Math.max(finalScore, 55);
             if (!matchType || finalScore === 55) matchType = "Sessiz harf iskeleti eşleşmesi";
         }
