@@ -151,10 +151,32 @@ function ngramSimilarity(s1: string, s2: string, n: number = 2): number {
     return (2.0 * intersection) / (grams1.length + grams2.length);
 }
 
+/**
+ * En uzun ortak ardışık alt dizeyi bulur (Longest Common Substring).
+ * "krow" vs "crowntech" → "row" (3 harf)
+ */
+function longestCommonSubstring(s1: string, s2: string): number {
+    if (s1.length === 0 || s2.length === 0) return 0;
+    let maxLen = 0;
+    // DP tablosu yerine alan-verimli yaklaşım
+    for (let i = 0; i < s1.length; i++) {
+        for (let j = 0; j < s2.length; j++) {
+            if (s1[i] === s2[j]) {
+                let len = 1;
+                while (i + len < s1.length && j + len < s2.length && s1[i + len] === s2[j + len]) {
+                    len++;
+                }
+                if (len > maxLen) maxLen = len;
+            }
+        }
+    }
+    return maxLen;
+}
+
 function getPhoneticKey(text: string): string {
     return text
         .replace(/[ş]/g, 's')
-        .replace(/[ç]/g, 'c')
+        .replace(/[çc]/g, 'k')  // c ve ç → k (cr/kr eşdeğerliği)
         .replace(/[ğg]/g, 'k')
         .replace(/[bp]/g, 'p')
         .replace(/[dt]/g, 't')
@@ -269,7 +291,7 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
                 }
 
                 // FONETİK SUBSTRING/PREFIX EŞLEŞMESİ
-                // Örn: "krow" → fonetik "krow", "growpal" → fonetik "krowpal" → prefix eşleşir
+                // Örn: "krow" → fonetik "krow", "crowntech" → fonetik "krowntek" → prefix eşleşir
                 const qPhonetic = getPhoneticKey(qTokenAscii);
                 const cPhonetic = getPhoneticKey(ctAscii);
                 if (qPhonetic.length >= 3 && (cPhonetic.includes(qPhonetic) || qPhonetic.includes(cPhonetic))) {
@@ -288,6 +310,32 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
                 const shortLen = Math.min(qToken.length, ct.text.length);
                 if (commonPrefixLen >= 4 || (commonPrefixLen >= 3 && commonPrefixLen >= shortLen * 0.75)) {
                     return true;
+                }
+
+                // ARDIŞIK 3+ HARF EŞLEŞMESİ (Longest Common Substring)
+                // Örn: "krow" vs "crowntech" → "row" (3 harf ardışık) → eşleşmeli
+                // Hem orijinal hem ASCII varyantlarıyla kontrol
+                const lcsOriginal = longestCommonSubstring(qToken, ct.text);
+                const lcsAscii = longestCommonSubstring(qTokenAscii, ctAscii);
+                const lcsPhonetic = longestCommonSubstring(qPhonetic, cPhonetic);
+                const bestLcs = Math.max(lcsOriginal, lcsAscii, lcsPhonetic);
+                // En az 3 ardışık harf eşleşmeli VE bu sorgu uzunluğunun en az %60'ı olmalı
+                if (bestLcs >= 3 && bestLcs >= qToken.length * 0.6) {
+                    return true;
+                }
+
+                // CR/KR PREFİX EŞDEĞERLİĞİ
+                // Başlangıçta "cr" ve "kr" aynı okunduğu için eşdeğer say
+                const qNormCrKr = qTokenAscii.replace(/^kr/, 'cr').replace(/^cr/, 'cr');
+                const cNormCrKr = ctAscii.replace(/^kr/, 'cr').replace(/^cr/, 'cr');
+                if (qNormCrKr !== qTokenAscii || cNormCrKr !== ctAscii) {
+                    // cr/kr normalizasyonu yapıldı, şimdi substring kontrolü yap
+                    if (cNormCrKr.includes(qNormCrKr) || qNormCrKr.includes(cNormCrKr)) {
+                        return true;
+                    }
+                    if (cNormCrKr.startsWith(qNormCrKr) || qNormCrKr.startsWith(cNormCrKr)) {
+                        return true;
+                    }
                 }
 
                 return false;
@@ -481,6 +529,32 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
                     const cpScore = Math.round(60 + prefixRatio * 20); // 60-80 arası
                     morphScore = Math.max(morphScore, cpScore);
                 }
+
+                // ARDIŞIK 3+ HARF EŞLEŞMESİ - MORPH SKORU
+                // Örn: "krow" vs "crowntech" → "row" (3 harf ardışık)
+                const lcsM = Math.max(
+                    longestCommonSubstring(qToken, ct),
+                    longestCommonSubstring(qAscii, cAscii),
+                    longestCommonSubstring(qPhonetic, cPhonetic)
+                );
+                if (lcsM >= 3 && lcsM >= qToken.length * 0.6) {
+                    // Skor: ardışık eşleşen harf oranına göre 55-75 arası
+                    const lcsRatio = lcsM / qToken.length;
+                    const lcsScore = Math.round(55 + lcsRatio * 20);
+                    morphScore = Math.max(morphScore, lcsScore);
+                }
+
+                // CR/KR PREFİX EŞDEĞERLİĞİ - MORPH SKORU
+                const qCrKr = qAscii.replace(/^kr/, 'cr');
+                const cCrKr = cAscii.replace(/^kr/, 'cr');
+                if (qCrKr !== qAscii || cCrKr !== cAscii) {
+                    if (cCrKr.includes(qCrKr) || qCrKr.includes(cCrKr)) {
+                        morphScore = Math.max(morphScore, 70);
+                    }
+                    if (cCrKr.startsWith(qCrKr)) {
+                        morphScore = Math.max(morphScore, 80);
+                    }
+                }
             }
         }
     }
@@ -515,6 +589,55 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
             : (100 / candidateTokenCount) + 10; // Fuzzy match ise sıkı kural
 
         finalScore = Math.min(finalScore, maxAllowedScore);
+    }
+
+    // STRONG SINGLE-TOKEN OVERLAP FLOOR
+    // Arama kelimesi, marka adındaki herhangi bir kelimenin %50'sinden fazlası ile eşleşiyorsa
+    // CRITICAL CAP'e rağmen minimum skor garantisi. Örn: "ersan" → "dersan" (5/6 = %83 örtüşme)
+    if (meaningfulQTokens.length === 1 && hasAnyTokenMatch && meaningfulQTokens[0].length >= 3) {
+        const qToken = meaningfulQTokens[0];
+        const qTokenAscii = getAsciiVariant(qToken);
+
+        let bestOverlapRatio = 0;
+        for (const ct of meaningfulCTokens) {
+            const ctAscii = getAsciiVariant(ct);
+
+            // Edit distance tabanlı örtüşme (max 2 edit distance)
+            const d = Math.min(
+                levenshteinDistance(qToken, ct),
+                levenshteinDistance(qTokenAscii, ctAscii)
+            );
+            const maxLen = Math.max(qToken.length, ct.length);
+            if (d <= 2) {
+                bestOverlapRatio = Math.max(bestOverlapRatio, 1 - (d / maxLen));
+            }
+
+            // Substring örtüşme: sorgu adayın içinde veya tersi
+            if (ct.includes(qToken) || ctAscii.includes(qTokenAscii)) {
+                bestOverlapRatio = Math.max(bestOverlapRatio, qToken.length / ct.length);
+            }
+            if (qToken.includes(ct) || qTokenAscii.includes(ctAscii)) {
+                bestOverlapRatio = Math.max(bestOverlapRatio, ct.length / qToken.length);
+            }
+
+            // LCS örtüşme (fonetik dahil)
+            const lcs = Math.max(
+                longestCommonSubstring(qTokenAscii, ctAscii),
+                longestCommonSubstring(getPhoneticKey(qTokenAscii), getPhoneticKey(ctAscii))
+            );
+            if (lcs >= 3) {
+                bestOverlapRatio = Math.max(bestOverlapRatio, lcs / maxLen);
+            }
+        }
+
+        // >%50 örtüşme varsa, minimum skor tabanı uygula
+        if (bestOverlapRatio > 0.5) {
+            const overlapFloor = Math.min(70, Math.round(bestOverlapRatio * 70));
+            if (overlapFloor > finalScore) {
+                finalScore = overlapFloor;
+                matchType = "Güçlü kelime örtüşmesi";
+            }
+        }
     }
 
     // FIRST WORD MATCH RULE
