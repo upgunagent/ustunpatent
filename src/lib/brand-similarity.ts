@@ -182,7 +182,16 @@ function getPhoneticKey(text: string): string {
         .replace(/[dt]/g, 't')
         .replace(/[ıi]/g, 'i')
         .replace(/[oö]/g, 'o')
-        .replace(/[uü]/g, 'u');
+        .replace(/[uü]/g, 'u')
+        .replace(/ks/g, 'x');   // ks = x eşdeğerliği
+}
+
+/**
+ * KS/X eşdeğerliği: "ks" harflerini "x" ile normalize eder.
+ * Örn: "foks" → "fox", "teksas" → "texas"
+ */
+function normalizeKsX(text: string): string {
+    return text.replace(/ks/g, 'x');
 }
 
 
@@ -227,7 +236,11 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
     // Calculate EXACT matches (ASCII-normalized: ı=i, ş=s, ç=c, ö=o, ü=u, ğ=g)
     for (const qToken of meaningfulQTokens) {
         const qTokenAscii = getAsciiVariant(qToken);
-        const exactMatchIndex = cTokenFlags.findIndex(ct => ct.text === qToken || getAsciiVariant(ct.text) === qTokenAscii);
+        const qTokenKsX = normalizeKsX(qTokenAscii);
+        const exactMatchIndex = cTokenFlags.findIndex(ct => {
+            const ctAscii = getAsciiVariant(ct.text);
+            return ct.text === qToken || ctAscii === qTokenAscii || normalizeKsX(ctAscii) === qTokenKsX;
+        });
         if (exactMatchIndex !== -1) {
             qTokensMatched++;
             matchedTokenList.push(qToken);
@@ -338,6 +351,18 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
                     }
                 }
 
+                // KS/X EŞDEĞERLİĞİ
+                // "ks" ve "x" aynı okunduğu için eşdeğer say
+                // Örn: "foks" vs "fox" → normalize("foks") = "fox" → eşleşmeli
+                const qNormKsX = normalizeKsX(qTokenAscii);
+                const cNormKsX = normalizeKsX(ctAscii);
+                if (qNormKsX !== qTokenAscii || cNormKsX !== ctAscii) {
+                    if (qNormKsX === cNormKsX) return true;
+                    if (cNormKsX.includes(qNormKsX) || qNormKsX.includes(cNormKsX)) {
+                        return true;
+                    }
+                }
+
                 return false;
             });
 
@@ -355,7 +380,12 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
     // Special % Rule for Single Query Token
     if (meaningfulQTokens.length === 1 && hasAnyTokenMatch) {
         const qToken = meaningfulQTokens[0];
-        const exactMatch = cTokenFlags.find(ct => ct.text === qToken);
+        const qTokenAsciiSingle = getAsciiVariant(qToken);
+        const qTokenKsXSingle = normalizeKsX(qTokenAsciiSingle);
+        const exactMatch = cTokenFlags.find(ct => {
+            const ctAscii = getAsciiVariant(ct.text);
+            return ct.text === qToken || ctAscii === qTokenAsciiSingle || normalizeKsX(ctAscii) === qTokenKsXSingle;
+        });
 
         if (exactMatch) {
             const totalTokens = meaningfulCTokens.length;
@@ -428,6 +458,12 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
                 const qtAscii = getAsciiVariant(qt);
                 const ctAscii = getAsciiVariant(ct);
                 if (qt !== ct && qtAscii === ctAscii) {
+                    bestTokenMatch = Math.max(bestTokenMatch, 98);
+                }
+                // KS/X eşdeğerliği
+                const qtKsX = normalizeKsX(qtAscii);
+                const ctKsXVal = normalizeKsX(ctAscii);
+                if (qt !== ct && qtKsX === ctKsXVal) {
                     bestTokenMatch = Math.max(bestTokenMatch, 98);
                 }
             }
@@ -552,6 +588,20 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
                         morphScore = Math.max(morphScore, 70);
                     }
                     if (cCrKr.startsWith(qCrKr)) {
+                        morphScore = Math.max(morphScore, 80);
+                    }
+                }
+
+                // KS/X EŞDEĞERLİĞİ - MORPH SKORU
+                const qKsX = normalizeKsX(qAscii);
+                const cKsX = normalizeKsX(cAscii);
+                if (qKsX !== qAscii || cKsX !== cAscii) {
+                    if (qKsX === cKsX) {
+                        morphScore = Math.max(morphScore, 95);
+                    } else if (cKsX.includes(qKsX) || qKsX.includes(cKsX)) {
+                        morphScore = Math.max(morphScore, 70);
+                    }
+                    if (cKsX.startsWith(qKsX)) {
                         morphScore = Math.max(morphScore, 80);
                     }
                 }
