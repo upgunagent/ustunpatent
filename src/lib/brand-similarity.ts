@@ -30,7 +30,8 @@ const ASCII_MAP: Record<string, string> = {
 function normalizeText(text: string): string {
     if (!text) return "";
     let normalized = text.toLocaleLowerCase('tr-TR');
-    normalized = normalized.replace(/[-_/.+,&]/g, ' ');
+    // Tüm noktalama işaretlerini boşluğa çevir (harfler, rakamlar ve boşluk hariç)
+    normalized = normalized.replace(/[^a-zA-Z0-9\sçğıöşüÇĞİÖŞÜ]/g, ' ');
     return normalized.replace(/\s+/g, ' ').trim();
 }
 
@@ -45,6 +46,52 @@ function getConsonantSkeleton(text: string): string {
 
 function tokenize(text: string): string[] {
     return text.split(' ').filter(t => t.length > 0);
+}
+
+/**
+ * Ardışık tek harfleri (single-letter tokens) birleştirerek tek kelime oluşturur.
+ * Örn: "s a r u s group" → "sarus group"
+ * Örn: "a b c teknoloji" → "abc teknoloji"
+ * Örn: "ab c d ef" → "ab cd ef"
+ */
+function mergeSingleLetters(text: string): string {
+    const tokens = text.split(' ').filter(t => t.length > 0);
+    const result: string[] = [];
+    let buffer = '';
+
+    for (const token of tokens) {
+        if (token.length === 1) {
+            buffer += token;
+        } else {
+            if (buffer.length > 0) {
+                result.push(buffer);
+                buffer = '';
+            }
+            result.push(token);
+        }
+    }
+    if (buffer.length > 0) {
+        result.push(buffer);
+    }
+
+    return result.join(' ');
+}
+
+/**
+ * Noktalama işaretlerini tamamen kaldırarak harfleri birleştirir.
+ * Birden fazla kelimeyi ayrı ayrı collapse yapar.
+ * Örn: "s.a.r.u.s" → "sarus"
+ * Örn: "s s.a.r.u.s group" → "s sarus group" (token bazında)
+ */
+function collapsePunctuation(text: string): string {
+    if (!text) return '';
+    // Önce orijinal metindeki noktalama işaretlerini kaldır (boşlukları koru)
+    // Boşluklarla ayrılmış parçaları bul, her parçadan noktalamayı temizle
+    return text
+        .split(/\s+/)
+        .map(part => part.replace(/[^a-zA-Z0-9çğıöşüÇĞİÖŞÜ]/g, ''))
+        .filter(p => p.length > 0)
+        .join(' ');
 }
 
 // --- Distance Algorithms ---
@@ -204,16 +251,41 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
 
     if (!qNorm || !cNorm) return { score: 0, reason: "", matchedTokens: [] };
 
-    // Identical exact match
-    if (qNorm === cNorm) return { score: 100, reason: "Tam Eşleşme", matchedTokens: [qNorm], details: { tokenScore: 100, charScore: 100, phoneticScore: 100, morphScore: 100 } };
+    // Noktalama işaretlerini kaldırıp tek harfleri birleştir
+    // Örn: "s s.a.r.u.s group" → normalize → "s s a r u s group" → merge → "sarus group"
+    const qMerged = mergeSingleLetters(qNorm);
+    const cMerged = mergeSingleLetters(cNorm);
 
-    // Tokenization
+    // Orijinal metinden noktalamayı tamamen kaldırılmış varyant
+    // Örn: "s.a.r.u.s" → "sarus" (boşluk olmadan doğrudan birleştirme)
+    const cCollapsed = collapsePunctuation(candidate.toLocaleLowerCase('tr-TR'));
+    const cCollapsedMerged = mergeSingleLetters(cCollapsed);
+
+    // Identical exact match
+    if (qNorm === cNorm || qMerged === cMerged) return { score: 100, reason: "Tam Eşleşme", matchedTokens: [qNorm], details: { tokenScore: 100, charScore: 100, phoneticScore: 100, morphScore: 100 } };
+
+    // Tokenization - hem normal hem merged varyantları tokenize et
     const qTokens = tokenize(qNorm);
     const cTokens = tokenize(cNorm);
+
+    // Merged tokenları da oluştur (tek harfler birleştirilmiş)
+    const cMergedTokens = tokenize(cMerged);
+    const cCollapsedTokens = tokenize(cCollapsedMerged);
 
     // FILTER: Ignore single-character tokens
     const meaningfulQTokens = qTokens.filter(t => t.length >= 2);
     const meaningfulCTokens = cTokens.filter(t => t.length >= 2);
+
+    // Merged/collapsed tokenlardan anlamlı olanları al
+    const meaningfulCMergedTokens = cMergedTokens.filter(t => t.length >= 2);
+    const meaningfulCCollapsedTokens = cCollapsedTokens.filter(t => t.length >= 2);
+
+    // Tüm aday tokenlarını birleştir (tekrarları önle)
+    const allCandidateTokens = new Set<string>();
+    meaningfulCTokens.forEach(t => allCandidateTokens.add(t));
+    meaningfulCMergedTokens.forEach(t => allCandidateTokens.add(t));
+    meaningfulCCollapsedTokens.forEach(t => allCandidateTokens.add(t));
+    const expandedCTokens = Array.from(allCandidateTokens);
 
     // Early exit if no meaningful tokens
     if (meaningfulQTokens.length === 0) {
@@ -226,7 +298,8 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
     let matchType = "";
 
     // Identify generic tokens in candidate
-    const cTokenFlags = meaningfulCTokens.map(t => ({
+    // Expanded tokens kullan (normal + merged + collapsed)
+    const cTokenFlags = expandedCTokens.map(t => ({
         text: t,
         isGeneric: GENERIC_TERMS.has(t) || GENERIC_TERMS.has(getAsciiVariant(t))
     }));
@@ -438,7 +511,7 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
 
         for (const qt of meaningfulQTokens) {
             let bestTokenMatch = 0;
-            for (const ct of meaningfulCTokens) {
+            for (const ct of expandedCTokens) {
                 const d = levenshteinDistance(qt, ct);
                 const jw = jaroWinkler(qt, ct);
 
@@ -485,8 +558,9 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
     let phoneticScore = 0;
 
     if (hasAnyTokenMatch) {
+        // Merged varyantla da fonetik karşılaştırma yap
         const qPhon = getPhoneticKey(qNorm);
-        const cPhon = getPhoneticKey(cNorm);
+        const cPhon = getPhoneticKey(cMerged);
 
         const pLenRatio = Math.min(qPhon.length, cPhon.length) / Math.max(qPhon.length, cPhon.length);
 
@@ -502,10 +576,10 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
 
     // --- D) Morphological Score (Stemming) ---
     let morphScore = 0;
-    if (meaningfulCTokens.length >= 1) {
+    if (expandedCTokens.length >= 1) {
         for (const qToken of meaningfulQTokens) {
             if (qToken.length < 2) continue;
-            for (const ct of meaningfulCTokens) {
+            for (const ct of expandedCTokens) {
                 // ASCII varyantları (ı=i, ş=s, ç=c, ö=o, ü=u, ğ=g)
                 const qAscii = getAsciiVariant(qToken);
                 const cAscii = getAsciiVariant(ct);
@@ -612,7 +686,16 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
     // --- E) Combined/Split variations ---
     const qCombined = meaningfulQTokens.join('');
     const cCombined = meaningfulCTokens.join('');
-    if (qCombined === cCombined) {
+    const cCombinedMerged = meaningfulCMergedTokens.join('');
+    const cCombinedCollapsed = meaningfulCCollapsedTokens.join('');
+    if (qCombined === cCombined || qCombined === cCombinedMerged || qCombined === cCombinedCollapsed) {
+        charScore = Math.max(charScore, 95);
+        if (!tokenScore) matchType = "Birleşik yazım eşleşmesi";
+    }
+    // ASCII varyantlarıyla da birleşik kontrol
+    const qCombinedAscii = getAsciiVariant(qCombined);
+    const cCombinedCollapsedAscii = getAsciiVariant(cCombinedCollapsed);
+    if (qCombinedAscii === cCombinedCollapsedAscii) {
         charScore = Math.max(charScore, 95);
         if (!tokenScore) matchType = "Birleşik yazım eşleşmesi";
     }
@@ -629,14 +712,24 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
     // CRITICAL CAP: Single token query vs Multi token candidate
     // Örnek: "demra" (1 token) vs "boratay derma sciences" (3 tokens)
     // Sadece 1 kelime benzer → maksimum skor = 100/token_count 
-    if (hasAnyTokenMatch && meaningfulQTokens.length === 1 && meaningfulCTokens.length > 1) {
-        const candidateTokenCount = meaningfulCTokens.length;
+    // Gerçek kelime sayısını bul (merged/collapsed en doğru sonucu verir)
+    const realCandidateTokenCount = Math.min(
+        meaningfulCMergedTokens.length || Infinity,
+        meaningfulCCollapsedTokens.length || Infinity,
+        meaningfulCTokens.length || Infinity
+    );
+    const effectiveCTokenCount = realCandidateTokenCount === Infinity ? expandedCTokens.length : realCandidateTokenCount;
+
+    if (hasAnyTokenMatch && meaningfulQTokens.length === 1 && effectiveCTokenCount > 1) {
+        // Jenerik token sayısını hesapla (merged tokenlardan)
+        const mergedGenericCount = meaningfulCMergedTokens.filter(t => GENERIC_TERMS.has(t) || GENERIC_TERMS.has(getAsciiVariant(t))).length;
+        const nonGenericCount = Math.max(effectiveCTokenCount - mergedGenericCount, 1);
 
         // Maksimum skor = 100 / token_count (3 kelimeden 1 eşleşme = max %33)
         // tokenScore varsa (exact match) onu kullan, yoksa token_count'a göre hesapla
         const maxAllowedScore = tokenScore > 0
             ? tokenScore + 15 // Exact match varsa küçük bonus
-            : (100 / candidateTokenCount) + 10; // Fuzzy match ise sıkı kural
+            : (100 / nonGenericCount) + 10; // Fuzzy match ise sıkı kural
 
         finalScore = Math.min(finalScore, maxAllowedScore);
     }
@@ -649,7 +742,7 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
         const qTokenAscii = getAsciiVariant(qToken);
 
         let bestOverlapRatio = 0;
-        for (const ct of meaningfulCTokens) {
+        for (const ct of expandedCTokens) {
             const ctAscii = getAsciiVariant(ct);
 
             // Edit distance tabanlı örtüşme (max 2 edit distance)
@@ -692,9 +785,10 @@ export function calculateBrandSimilarity(query: string, candidate: string): Simi
 
     // FIRST WORD MATCH RULE
     // If query matches the first word of the candidate, ensure high score regardless of length
-    if (meaningfulQTokens.length > 0 && meaningfulCTokens.length > 0) {
+    if (meaningfulQTokens.length > 0 && expandedCTokens.length > 0) {
         const qFirst = meaningfulQTokens[0];
-        const cFirst = meaningfulCTokens[0];
+        // İlk anlamlı tokenı bul (merged/collapsed dahil)
+        const cFirst = meaningfulCMergedTokens.length > 0 ? meaningfulCMergedTokens[0] : (meaningfulCCollapsedTokens.length > 0 ? meaningfulCCollapsedTokens[0] : expandedCTokens[0]);
         const qAscii = getAsciiVariant(qFirst);
         const cAscii = getAsciiVariant(cFirst);
 
